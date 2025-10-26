@@ -58,13 +58,17 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 /** Rate limiting (after trust proxy so req.ip is correct) */
+// sign-natural-api/index.js
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,
   standardHeaders: true,
   legacyHeaders: false,
+  // 👇 let the SSE endpoint through
+  skip: (req) => req.path === '/api/notifications/stream',
 });
 app.use(limiter);
+
 
 /** Routes */
 app.use('/api/auth', authRoutes);

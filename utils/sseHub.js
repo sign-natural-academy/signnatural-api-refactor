@@ -29,21 +29,23 @@ export function addClient({ res, user }) {
 export function sendToUser(userId, payload) {
   const set = clientsByUser.get(String(userId));
   if (!set) return;
-  const data = `data: ${JSON.stringify(payload)}\n\n`;
-  for (const res of set) try { res.write(data); } catch {}
+  for (const res of set) safeWrite(res, payload);
 }
 
 export function sendToAdmins(payload) {
-  const data = `data: ${JSON.stringify(payload)}\n\n`;
-  for (const res of adminClients) try { res.write(data); } catch {}
+  for (const res of adminClients) safeWrite(res, payload);
 }
 
 export function sendToAll(payload) {
-  const data = `data: ${JSON.stringify(payload)}\n\n`;
-  for (const res of allClients) try { res.write(data); } catch {}
+  for (const res of allClients) safeWrite(res, payload);
+}
+
+function safeWrite(res, payload) {
+  try { res.write(`data: ${JSON.stringify(payload)}\n\n`); } catch {}
 }
 
 function reqOnClose(res, cb) {
   res.on('close', cb);
   res.on('finish', cb);
 }
+
