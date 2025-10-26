@@ -1,60 +1,109 @@
-//controllers/bookingController.js
-
+// controllers/bookingController.js
 import asyncHandler from 'express-async-handler';
 import Booking from '../models/Booking.js';
 import Notification from '../models/Notification.js';
-import { sendToAdmins,sendToUser } from '../utils/sseHub.js';
+import { sendToAdmins, sendToUser } from '../utils/sseHub.js';
 
-const createBooking = asyncHandler(async (req, res) => {
+// Map loose inputs to exact Mongoose model names used by refPath
+function normalizeItemType(v) {
+  const t = String(v || '').trim().toLowerCase();
+  if (t === 'course' || t === 'courses') return 'Course';
+  if (t === 'workshop' || t === 'workshops') return 'Workshop';
+  if (t === 'product' || t === 'products') return 'Product';
+  return null;
+}
+
+function toNumberOrNull(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function toValidDateOrNull(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// POST /api/bookings  (Protected)
+export const createBooking = asyncHandler(async (req, res) => {
   const { itemType, itemId, price, scheduledAt } = req.body;
-  if (!itemType || !itemId) { res.status(400); throw new Error('itemType and itemId required'); }
+
+  const normType = normalizeItemType(itemType);
+  if (!normType || !itemId) {
+    res.status(400);
+    throw new Error('Invalid payload: itemType (Course|Workshop|Product) and itemId are required.');
+  }
+
+  const priceNum = toNumberOrNull(price);
+  if (price !== undefined && priceNum === null) {
+    res.status(400);
+    throw new Error('Invalid price: must be a number.');
+  }
+
+  const when = toValidDateOrNull(scheduledAt);
+
   const booking = await Booking.create({
     user: req.user._id,
-    itemType,
+    itemType: normType,     // MUST match model names for refPath
     item: itemId,
-    price,
-    scheduledAt: scheduledAt ? new Date(scheduledAt) : undefined,
+    price: priceNum ?? 0,
+    scheduledAt: when || undefined,
     status: 'pending',
-    payment: { paid: false, amount: price }
+    payment: { paid: false, amount: priceNum ?? 0 },
   });
+
+  // Notify admins (DB + SSE)
   await Notification.create({
-  audience: 'admin',
-  type: 'new_booking',
-  message: `New ${itemType.toLowerCase()} booking created.`,
-  link: '/admin-dashboard?tab=bookings',
-  meta: { bookingId: booking._id, itemType }
-});
-sendToAdmins({
-  kind: 'notification',
-  type: 'new_booking',
-  message: `New ${itemType.toLowerCase()} booking created.`,
-  link: '/admin-dashboard?tab=bookings',
-  createdAt: new Date().toISOString(),
-});
-  res.status(201).json(booking);
+    audience: 'admin',
+    type: 'new_booking',
+    message: `New ${normType.toLowerCase()} booking created.`,
+    link: '/admin-dashboard?tab=bookings',
+    meta: { bookingId: booking._id, itemType: normType },
+  });
 
+  sendToAdmins({
+    kind: 'admin_board',
+    type: 'new_booking',
+    message: `New ${normType.toLowerCase()} booking created.`,
+    link: '/admin-dashboard?tab=bookings',
+    entity: { id: booking._id.toString(), itemType: normType },
+    createdAt: new Date().toISOString(),
+  });
+
+  // Return with convenient populated preview
+  const populated = await Booking.findById(booking._id)
+    .populate('item')
+    .populate('user', 'name email');
+
+  res.status(201).json(populated);
 });
 
-
-const getMyBookings = asyncHandler(async (req, res) => {
-  const bookings = await Booking.find({ user: req.user._id }).populate('item');
+// GET /api/bookings/me  (Protected)
+export const getMyBookings = asyncHandler(async (req, res) => {
+  const bookings = await Booking.find({ user: req.user._id })
+    .sort({ createdAt: -1 })
+    .populate('item');
   res.json(bookings);
 });
 
-const getAllBookings = asyncHandler(async (req, res) => {
-  const bookings = await Booking.find().populate('user').populate('item');
+// GET /api/bookings  (Admin)
+export const getAllBookings = asyncHandler(async (req, res) => {
+  const bookings = await Booking.find()
+    .sort({ createdAt: -1 })
+    .populate('user', 'name email')
+    .populate('item');
   res.json(bookings);
 });
 
-const updateBookingStatus = asyncHandler(async (req, res) => {
-  // defensive read
+// PUT /api/bookings/:id/status  (Admin)
+export const updateBookingStatus = asyncHandler(async (req, res) => {
   const status = req.body?.status;
+  const allowed = ['pending', 'confirmed', 'cancelled', 'completed'];
+
   if (!status) {
     res.status(400);
     throw new Error('status is required in request body');
   }
-
-  const allowed = ['pending', 'confirmed', 'cancelled', 'completed'];
   if (!allowed.includes(status)) {
     res.status(400);
     throw new Error(`Invalid status. Allowed: ${allowed.join(', ')}`);
@@ -67,31 +116,41 @@ const updateBookingStatus = asyncHandler(async (req, res) => {
   }
 
   booking.status = status;
-  await booking.save(); // triggers hooks and returns updated doc
+  await booking.save();
 
+  // Create user notification (DB)
   await Notification.create({
-  user: booking.user,
-  audience: 'user',
-  type: 'booking_status',
-  message: `Your booking status is now "${status}".`,
-  link: '/user-dashboard?tab=bookings',
-  meta: { bookingId: booking._id, status }
-});
-sendToUser(booking.user, {
-  kind: 'notification',
-  type: 'booking_status',
-  message: `Your booking status is now "${status}".`,
-  link: '/user-dashboard?tab=bookings',
-  createdAt: new Date().toISOString(),
-});
-sendToAdmins({
-  kind: 'admin_board',
-  type: 'booking_updated',
-  entity: { id: booking._id, status },
-  message: 'Booking status updated',
-  createdAt: new Date().toISOString(),
-});
-  res.json(booking);
-});
+    user: booking.user,
+    audience: 'user',
+    type: 'booking_status',
+    message: `Your booking status is now "${status}".`,
+    link: '/user-dashboard?tab=bookings',
+    meta: { bookingId: booking._id, status },
+  });
 
-export { createBooking, getMyBookings, getAllBookings, updateBookingStatus };
+  // SSE to the booking owner
+  if (booking.user) {
+    sendToUser(booking.user.toString(), {
+      kind: 'notification',
+      type: 'booking_status',
+      message: `Your booking status is now "${status}".`,
+      link: '/user-dashboard?tab=bookings',
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  // SSE to admins for dashboard boards
+  sendToAdmins({
+    kind: 'admin_board',
+    type: 'booking_updated',
+    entity: { id: booking._id.toString(), status },
+    message: 'Booking status updated',
+    createdAt: new Date().toISOString(),
+  });
+
+  // Return updated w/ population for UI
+  const populated = await Booking.findById(booking._id)
+    .populate('user', 'name email')
+    .populate('item');
+  res.json(populated);
+});
