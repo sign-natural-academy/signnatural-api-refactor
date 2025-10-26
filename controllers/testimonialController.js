@@ -1,17 +1,23 @@
-//controllers/testimonialController.js
-
+// controllers/testimonialController.js
 import asyncHandler from 'express-async-handler';
 import Testimonial from '../models/Testimonial.js';
 import { uploadBufferToCloudinary, deleteFromCloudinary } from '../config/cloudinary.js';
 import Notification from '../models/Notification.js';
-import { sendToUser ,sendToAdmins} from '../utils/sseHub.js';
+import { sendToUser, sendToAdmins } from '../utils/sseHub.js';
+
+/** Helper: normalize rating to 1..5 (default 5) */
+function toRating(val) {
+  const n = Number(val);
+  if (!Number.isFinite(n)) return 5;
+  return Math.min(5, Math.max(1, Math.round(n)));
+}
 
 /**
  * POST /api/testimonials
  * Protected (user) - create testimonial (image optional)
  */
 export const createTestimonial = asyncHandler(async (req, res) => {
-  const { text, tag } = req.body;
+  const { text, tag, rating } = req.body; // <-- rating was missing before
   if (!text || text.trim().length === 0) {
     res.status(400);
     throw new Error('Text is required');
@@ -20,9 +26,11 @@ export const createTestimonial = asyncHandler(async (req, res) => {
   let imageUrl = null;
   let imagePublicId = null;
 
-  if (req.file && req.file.buffer) {
-    // pass options object — folder + transformations
-    const options = { folder: 'signnatural/testimonials', transformation: [{ width: 1200, crop: 'limit' }] };
+  if (req.file?.buffer) {
+    const options = {
+      folder: 'signnatural/testimonials',
+      transformation: [{ width: 1200, crop: 'limit' }],
+    };
     const result = await uploadBufferToCloudinary(req.file.buffer, options);
     imageUrl = result.secure_url;
     imagePublicId = result.public_id;
@@ -34,21 +42,21 @@ export const createTestimonial = asyncHandler(async (req, res) => {
     tag: tag || null,
     imageUrl,
     imagePublicId,
-    rating:rating ? Number(rating): undefined,
+    rating: toRating(rating), // <-- clamp to 1..5
     approved: false, // admin must approve
   });
+
+  // Notify admins (SSE)
   sendToAdmins({
-  kind: 'admin_board',
-  type: 'testimonial_pending_created',
-  message: 'New story submitted and is pending approval.',
-  entity: { id: doc._id },
-  createdAt: new Date().toISOString(),
-});
+    kind: 'admin_board',
+    type: 'testimonial_pending_created',
+    message: 'New story submitted and is pending approval.',
+    entity: { id: doc._id },
+    createdAt: new Date().toISOString(),
+  });
 
   res.status(201).json(doc);
 });
-
-
 
 /**
  * GET /api/testimonials/approved
@@ -57,7 +65,7 @@ export const createTestimonial = asyncHandler(async (req, res) => {
 export const getApprovedTestimonials = asyncHandler(async (req, res) => {
   const docs = await Testimonial
     .find({ approved: true })
-    .populate('user', 'name') // NEW: bring the name along
+    .populate('user', 'name') // return the user's name
     .sort({ createdAt: -1 })
     .limit(50);
   res.json(docs);
@@ -68,7 +76,9 @@ export const getApprovedTestimonials = asyncHandler(async (req, res) => {
  * Admin - list pending testimonials
  */
 export const getPendingTestimonials = asyncHandler(async (req, res) => {
-  const docs = await Testimonial.find({ approved: false }).sort({ createdAt: -1 });
+  const docs = await Testimonial
+    .find({ approved: false })
+    .sort({ createdAt: -1 });
   res.json(docs);
 });
 
@@ -83,35 +93,43 @@ export const approveTestimonial = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error('Testimonial not found');
   }
+
   doc.approved = true;
   await doc.save();
-  await Notification.create({
-  user: doc.user,               // receiver
-  audience: 'user',
-  type: 'story_approved',
-  message: 'Your story has been approved and is now visible on Success Stories.',
-  link: '/stories',             // front-end route
-  meta: { testimonialId: doc._id }
-});
-sendToAdmins({
-  kind: 'admin_board',
-  type: 'testimonial_approved',
-  entity: { id: doc._id },
-  message: 'A story was approved.',
-  createdAt: new Date().toISOString(),
-});
 
-sendToUser(doc.user, {
-  kind: 'notification',
-  type: 'story_approved',
-  message: 'Your story has been approved!',
-  link: '/stories',
-  createdAt: new Date().toISOString(),
-});
+  // Create user notification (DB)
+  if (doc.user) {
+    await Notification.create({
+      user: doc.user,
+      audience: 'user',
+      type: 'story_approved',
+      message: 'Your story has been approved and is now visible on Success Stories.',
+      link: '/stories',
+      meta: { testimonialId: doc._id },
+    });
+  }
+
+  // SSE pushes
+  sendToAdmins({
+    kind: 'admin_board',
+    type: 'testimonial_approved',
+    entity: { id: doc._id },
+    message: 'A story was approved.',
+    createdAt: new Date().toISOString(),
+  });
+
+  if (doc.user) {
+    sendToUser(doc.user.toString(), {
+      kind: 'notification',
+      type: 'story_approved',
+      message: 'Your story has been approved!',
+      link: '/stories',
+      createdAt: new Date().toISOString(),
+    });
+  }
+
   res.json(doc);
-  
 });
-
 
 /**
  * DELETE /api/testimonials/:id
@@ -129,25 +147,31 @@ export const deleteTestimonial = asyncHandler(async (req, res) => {
     try {
       await deleteFromCloudinary(doc.imagePublicId);
     } catch (err) {
-      // Log but continue deletion in DB
-      console.error('Cloudinary delete failed:', err.message || err);
+      console.error('Cloudinary delete failed:', err?.message || err);
+      // continue with DB delete
     }
   }
 
-  await doc.remove();
+  await Testimonial.deleteOne({ _id: doc._id }); // Mongoose 7+ preferred over doc.remove()
+
   sendToAdmins({
-  kind: 'admin_board',
-  type: 'testimonial_deleted',
-  entity: { id: doc._id },
-  message: 'A story was deleted.',
-  createdAt: new Date().toISOString(),
-});
+    kind: 'admin_board',
+    type: 'testimonial_deleted',
+    entity: { id: doc._id },
+    message: 'A story was deleted.',
+    createdAt: new Date().toISOString(),
+  });
+
   res.json({ message: 'Testimonial deleted' });
 });
 
-// GET /api/testimonials/me  (Protected)
+/**
+ * GET /api/testimonials/mine
+ * Protected - current user's testimonials
+ */
 export const getMyTestimonials = asyncHandler(async (req, res) => {
-  const docs = await Testimonial.find({ user: req.user._id })
+  const docs = await Testimonial
+    .find({ user: req.user._id })
     .sort({ createdAt: -1 });
   res.json(docs);
 });
