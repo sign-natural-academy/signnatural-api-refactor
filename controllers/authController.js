@@ -1,15 +1,18 @@
-//controllers/authController.js
+// controllers/authController.js
 import asyncHandler from 'express-async-handler';
 import bcrypt from 'bcryptjs';
-import Otp from '../models/Otp.js';
-import generateToken from '../utils/generateToken.js';
-import { sendOtpEmail } from '../utils/email.js';
-import User from '../models/User.js';
 import { OAuth2Client } from 'google-auth-library';
 
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+import Otp from '../models/Otp.js';
+import User from '../models/User.js';
+import generateToken from '../utils/generateToken.js';
+import { sendOtpEmail } from '../utils/email.js';
+import { sendToAdmins } from '../utils/sseHub.js';
 
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const OTP_EXPIRES_MIN = Number(process.env.OTP_EXPIRES_MINUTES) || 10;
+
+/* ---------------------------- Helpers ---------------------------- */
 
 async function createAndSendOtp(user) {
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -17,18 +20,20 @@ async function createAndSendOtp(user) {
   const expiresAt = new Date(Date.now() + OTP_EXPIRES_MIN * 60 * 1000);
 
   await Otp.deleteMany({ user: user._id, purpose: 'email_verification' });
-
   await Otp.create({
     user: user._id,
     codeHash: hash,
     purpose: 'email_verification',
-    expiresAt
+    expiresAt,
   });
 
   await sendOtpEmail(user.email, otp, user.name);
 }
 
-const registerUser = asyncHandler(async (req, res) => {
+/* --------------------------- Auth: Local -------------------------- */
+
+// POST /api/auth/register
+export const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) {
     res.status(400);
@@ -46,21 +51,23 @@ const registerUser = asyncHandler(async (req, res) => {
     email,
     password,
     role: 'user',
-    emailVerified: false
+    emailVerified: false,
+    isActive: true,
   });
 
-try {
-  await createAndSendOtp(user);
-  res.status(201).json({ message: 'User registered. OTP sent to email.' });
-} catch (e) {
-  console.error('OTP email send failed after registration:', e?.message || e);
-  // user is created & OTP saved in DB;
-  // they can use /api/auth/resend-otp once SMTP is ok
-  res.status(201).json({ message: 'User registered. OTP could not be sent right now—use "Resend code".' });
-}
+  try {
+    await createAndSendOtp(user);
+    res.status(201).json({ message: 'User registered. OTP sent to email.' });
+  } catch (e) {
+    console.error('OTP email send failed after registration:', e?.message || e);
+    res
+      .status(201)
+      .json({ message: 'User registered. OTP could not be sent right now—use "Resend code".' });
+  }
 });
 
-const verifyEmail = asyncHandler(async (req, res) => {
+// POST /api/auth/verify-email
+export const verifyEmail = asyncHandler(async (req, res) => {
   const { email, otp } = req.body;
   if (!email || !otp) {
     res.status(400);
@@ -78,17 +85,17 @@ const verifyEmail = asyncHandler(async (req, res) => {
 
   user.emailVerified = true;
   await user.save();
-
   await Otp.deleteMany({ user: user._id, purpose: 'email_verification' });
 
   const token = generateToken(user._id, user.role);
   res.json({
     token,
-    user: { _id: user._id, name: user.name, email: user.email, role: user.role, emailVerified: true }
+    user: { _id: user._id, name: user.name, email: user.email, role: user.role, emailVerified: true },
   });
 });
 
-const resendOtp = asyncHandler(async (req, res) => {
+// POST /api/auth/resend-otp
+export const resendOtp = asyncHandler(async (req, res) => {
   const { email } = req.body;
   if (!email) { res.status(400); throw new Error('email required'); }
 
@@ -100,7 +107,8 @@ const resendOtp = asyncHandler(async (req, res) => {
   res.json({ message: 'OTP resent to email.' });
 });
 
-const loginUser = asyncHandler(async (req, res) => {
+// POST /api/auth/login
+export const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) { res.status(400); throw new Error('email and password required'); }
 
@@ -108,34 +116,49 @@ const loginUser = asyncHandler(async (req, res) => {
   if (!user) { res.status(401); throw new Error('Invalid credentials'); }
 
   if (!user.emailVerified) { res.status(403); throw new Error('Email not verified'); }
+  if (!user.isActive) { res.status(403); throw new Error('Account disabled. Contact support.'); }
 
   const isMatch = await user.matchPassword(password);
   if (!isMatch) { res.status(401); throw new Error('Invalid credentials'); }
 
   const token = generateToken(user._id, user.role);
-  res.json({ token, user: { _id: user._id, name: user.name, email: user.email, role: user.role, emailVerified: user.emailVerified } });
+  res.json({
+    token,
+    user: { _id: user._id, name: user.name, email: user.email, role: user.role, emailVerified: user.emailVerified },
+  });
 });
 
-// Admin only: create an admin user (protected route)
-const createAdmin = asyncHandler(async (req, res) => {
+// POST /api/auth/create-admin  (protected + admin)
+export const createAdmin = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) { res.status(400); throw new Error('name, email and password required'); }
 
   const exists = await User.findOne({ email });
   if (exists) { res.status(400); throw new Error('Email already registered'); }
 
-  const admin = await User.create({ name, email, password, role: 'admin', emailVerified: true });
-  res.status(201).json({ _id: admin._id, name: admin.name, email: admin.email, role: admin.role });
+  const admin = await User.create({
+    name,
+    email,
+    password,
+    role: 'admin',
+    emailVerified: true,
+    isActive: true,
+  });
+
+  res
+    .status(201)
+    .json({ _id: admin._id, name: admin.name, email: admin.email, role: admin.role });
 });
 
-const getMe = asyncHandler(async (req, res) => {
+// GET /api/auth/me  (protected)
+export const getMe = asyncHandler(async (req, res) => {
   const u = await User.findById(req.user._id).select('-password');
   res.json(u);
 });
 
-export { registerUser, verifyEmail, resendOtp, loginUser, createAdmin, getMe };
+/* ------------------------ Auth: Google Sign-In ------------------------ */
 
-// Google Sign-In (register or login)
+// POST /api/auth/google
 export const googleSignIn = asyncHandler(async (req, res) => {
   const { credential } = req.body;
   if (!credential) {
@@ -162,26 +185,26 @@ export const googleSignIn = asyncHandler(async (req, res) => {
     throw new Error('Google account email not verified');
   }
 
-  // Either find user or create one (password is required by your schema)
   let user = await User.findOne({ email });
 
   if (!user) {
-    // create a random password (never used by the user)
     const randomPwd = await bcrypt.hash(sub + Date.now().toString(), 10);
     user = await User.create({
       name: name || email.split('@')[0],
       email,
-      password: randomPwd,           // required by your current schema
+      password: randomPwd,
       role: 'user',
-      emailVerified: true,           // Google verified
-      avatar: picture || undefined,  // optional
+      emailVerified: true,
+      isActive: true,
+      avatar: picture || undefined,
+      provider: 'google',
+      googleId: sub,
     });
-  } else if (!user.emailVerified) {
-    // trust Google verification
-    user.emailVerified = true;
-    // optionally update avatar/name once
+  } else {
+    if (!user.emailVerified) user.emailVerified = true;
     if (picture && !user.avatar) user.avatar = picture;
     if (name && !user.name) user.name = name;
+    if (user.isActive === false) { res.status(403); throw new Error('Account disabled. Contact support.'); }
     await user.save();
   }
 
@@ -197,4 +220,119 @@ export const googleSignIn = asyncHandler(async (req, res) => {
       avatar: user.avatar || null,
     },
   });
+});
+
+/* ---------------------- Admin: User Management ---------------------- */
+
+// GET /api/auth/users?search=&role=&page=&limit=
+export const listUsers = asyncHandler(async (req, res) => {
+  const { search = '', role, page = 1, limit = 50 } = req.query;
+
+  const q = {};
+  if (search) {
+    q.$or = [
+      { name:  { $regex: search, $options: 'i' } },
+      { email: { $regex: search, $options: 'i' } },
+    ];
+  }
+  if (role && ['user', 'admin'].includes(role)) q.role = role;
+
+  const pg  = Math.max(1, parseInt(page, 10) || 1);
+  const lim = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
+
+  const [items, total] = await Promise.all([
+    User.find(q).sort({ createdAt: -1 }).skip((pg - 1) * lim).limit(lim).select('-password'),
+    User.countDocuments(q),
+  ]);
+
+  res.json({ items, total, page: pg, limit: lim });
+});
+
+// PATCH /api/auth/users/:id/role  -> { role }
+export const updateUserRole = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { role } = req.body;
+  if (!['user', 'admin'].includes(role)) {
+    res.status(400);
+    throw new Error("Invalid role; must be 'user' or 'admin'.");
+  }
+
+  const user = await User.findById(id);
+  if (!user) { res.status(404); throw new Error('User not found'); }
+
+  if (user._id.toString() === req.user._id.toString()) {
+    res.status(400);
+    throw new Error('You cannot change your own role.');
+  }
+
+  user.role = role;
+  await user.save();
+
+  sendToAdmins?.({
+    kind: 'admin_board',
+    type: 'user_updated',
+    message: `User role updated to ${role}`,
+    entity: { id: user._id.toString(), role },
+    createdAt: new Date().toISOString(),
+  });
+
+  res.json({ _id: user._id, name: user.name, email: user.email, role: user.role, isActive: user.isActive });
+});
+
+// PATCH /api/auth/users/:id/status -> { isActive }
+export const updateUserStatus = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { isActive } = req.body;
+
+  if (typeof isActive !== 'boolean') {
+    res.status(400);
+    throw new Error('isActive must be boolean.');
+  }
+
+  const user = await User.findById(id);
+  if (!user) { res.status(404); throw new Error('User not found'); }
+
+  if (user._id.toString() === req.user._id.toString()) {
+    res.status(400);
+    throw new Error('You cannot disable your own account.');
+  }
+
+  user.isActive = isActive;
+  await user.save();
+
+  sendToAdmins?.({
+    kind: 'admin_board',
+    type: 'user_updated',
+    message: `User ${isActive ? 'enabled' : 'disabled'}`,
+    entity: { id: user._id.toString(), isActive },
+    createdAt: new Date().toISOString(),
+  });
+
+  res.json({ _id: user._id, name: user.name, email: user.email, role: user.role, isActive: user.isActive });
+});
+
+// DELETE /api/auth/users/:id  (soft delete -> isActive=false)
+export const softDeleteUser = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const user = await User.findById(id);
+  if (!user) { res.status(404); throw new Error('User not found'); }
+
+  if (user._id.toString() === req.user._id.toString()) {
+    res.status(400);
+    throw new Error('You cannot delete your own account.');
+  }
+
+  user.isActive = false;
+  await user.save();
+
+  sendToAdmins?.({
+    kind: 'admin_board',
+    type: 'user_updated',
+    message: 'User soft-deleted (disabled).',
+    entity: { id: user._id.toString(), isActive: false },
+    createdAt: new Date().toISOString(),
+  });
+
+  res.json({ message: 'User disabled (soft deleted)' });
 });

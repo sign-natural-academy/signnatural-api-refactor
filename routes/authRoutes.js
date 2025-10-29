@@ -6,7 +6,8 @@ import {
   resendOtp,
   loginUser,
   createAdmin,
-  getMe
+  getMe,
+  listUsers, updateUserRole, updateUserStatus, softDeleteUser,
 } from '../controllers/authController.js';
 
 import otpLimiter  from '../middlewares/otpLimiter.js';
@@ -38,5 +39,11 @@ router.get('/me', protect, getMe);
 
 // Admin-only: create another admin
 router.post('/admin', protect, requireAdmin, validate(createAdminSchema), createAdmin);
+
+// Admin user management
+router.get('/users', protect, requireAdmin, listUsers);
+router.patch('/users/:id/role', protect, requireAdmin, updateUserRole);
+router.patch('/users/:id/status', protect, requireAdmin, updateUserStatus);
+router.delete('/users/:id', protect, requireAdmin, softDeleteUser);
 
 export default router;

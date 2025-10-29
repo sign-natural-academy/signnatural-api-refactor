@@ -15,7 +15,7 @@ import workshopRoutes from './routes/workshopRoutes.js';
 import bookingRoutes from './routes/bookingRoutes.js';
 import testimonialRoutes from './routes/testimonialRoutes.js';
 import productRoutes from './routes/productRoutes.js';
-import userAdminRoutes from "./routes/userAdminRoutes.js";
+
 
 import { notFound, errorHandler } from './middlewares/errorMiddleware.js';
 import { verifyTransporter } from './utils/email.js';
@@ -80,7 +80,7 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/testimonials', testimonialRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/notifications', notificationRoutes)
-app.use("/api/users", userAdminRoutes);
+
 
 
 /** Health check */
