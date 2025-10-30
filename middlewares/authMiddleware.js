@@ -39,3 +39,15 @@ export const requireAdmin = (req, res, next) => {
   }
   next();
 };
+
+export function requireAdminOrSuper(req, res, next) {
+  if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
+  if (req.user.role === 'admin' || req.user.role === 'superuser') return next();
+  return res.status(403).json({ message: 'Admins only' });
+}
+
+export function requireSuperuser(req, res, next) {
+  if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
+  if (req.user.role === 'superuser') return next();
+  return res.status(403).json({ message: 'Superuser only' });
+}

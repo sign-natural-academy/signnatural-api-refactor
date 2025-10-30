@@ -11,7 +11,7 @@ import {
 } from '../controllers/authController.js';
 
 import otpLimiter  from '../middlewares/otpLimiter.js';
-import { protect, requireAdmin } from '../middlewares/authMiddleware.js';
+import { protect, requireAdmin,requireAdminOrSuper, requireSuperuser } from '../middlewares/authMiddleware.js';
 import validate from '../middlewares/validate.js';
 import {
   registerSchema,
@@ -41,9 +41,21 @@ router.get('/me', protect, getMe);
 router.post('/admin', protect, requireAdmin, validate(createAdminSchema), createAdmin);
 
 // Admin user management
-router.get('/users', protect, requireAdmin, listUsers);
-router.patch('/users/:id/role', protect, requireAdmin, updateUserRole);
-router.patch('/users/:id/status', protect, requireAdmin, updateUserStatus);
-router.delete('/users/:id', protect, requireAdmin, softDeleteUser);
+// router.get('/users', protect, requireAdmin, listUsers);
+// router.patch('/users/:id/role', protect, requireAdmin, updateUserRole);
+// router.patch('/users/:id/status', protect, requireAdmin, updateUserStatus);
+// router.delete('/users/:id', protect, requireAdmin, softDeleteUser);
+
+//list users — admin & superuser
+router.get('/users', protect, requireAdminOrSuper, listUsers);
+
+// role change — superuser only
+router.patch('/users/:id/role', protect, requireSuperuser, updateUserRole);
+
+// status toggle — admin can change users; superuser can change anyone except superuser
+router.patch('/users/:id/status', protect, requireAdminOrSuper, updateUserStatus);
+
+// soft delete — same constraints as status
+router.delete('/users/:id', protect, requireAdminOrSuper, softDeleteUser);
 
 export default router;

@@ -249,90 +249,124 @@ export const listUsers = asyncHandler(async (req, res) => {
 });
 
 // PATCH /api/auth/users/:id/role  -> { role }
+// ONLY superuser may change roles
 export const updateUserRole = asyncHandler(async (req, res) => {
+  if (req.user.role !== 'superuser') {
+    res.status(403); throw new Error('Only superuser can change roles');
+  }
+
   const { id } = req.params;
-  const { role } = req.body;
+  const { role } = req.body; // 'user' | 'admin' | 'superuser'
+
   if (!['user', 'admin'].includes(role)) {
-    res.status(400);
-    throw new Error("Invalid role; must be 'user' or 'admin'.");
+    // Optional: allow setting superuser only if you want that power exposed
+    // Safer default: disallow elevating to superuser from the UI entirely.
+    // If you DO allow, add 'superuser' to the includes above, but be careful.
   }
 
-  const user = await User.findById(id);
-  if (!user) { res.status(404); throw new Error('User not found'); }
+  const target = await User.findById(id);
+  if (!target) { res.status(404); throw new Error('User not found'); }
 
-  if (user._id.toString() === req.user._id.toString()) {
-    res.status(400);
-    throw new Error('You cannot change your own role.');
+  // Guardrails: cannot change your own role
+  if (String(target._id) === String(req.user._id)) {
+    res.status(400); throw new Error('Cannot change your own role');
   }
 
-  user.role = role;
-  await user.save();
+  // Cannot alter another superuser via this endpoint (unless you explicitly allow)
+  if (target.role === 'superuser') {
+    res.status(403); throw new Error('Cannot change a superuser role');
+  }
 
+  target.role = role;
+  await target.save();
+
+  // SSE to admin board, optional
   sendToAdmins?.({
     kind: 'admin_board',
     type: 'user_updated',
-    message: `User role updated to ${role}`,
-    entity: { id: user._id.toString(), role },
+    message: `Role changed to ${role}`,
+    entity: { id: target._id, role },
     createdAt: new Date().toISOString(),
   });
 
-  res.json({ _id: user._id, name: user.name, email: user.email, role: user.role, isActive: user.isActive });
+  res.json({ _id: target._id, role: target.role });
 });
 
 // PATCH /api/auth/users/:id/status -> { isActive }
+// Admin can toggle status for USERS only; Superuser can toggle anyone except superuser
 export const updateUserStatus = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { isActive } = req.body;
 
-  if (typeof isActive !== 'boolean') {
-    res.status(400);
-    throw new Error('isActive must be boolean.');
+  const target = await User.findById(id);
+  if (!target) { res.status(404); throw new Error('User not found'); }
+
+  // no self-disable to avoid lockouts
+  if (String(target._id) === String(req.user._id)) {
+    res.status(400); throw new Error('Cannot change your own status');
   }
 
-  const user = await User.findById(id);
-  if (!user) { res.status(404); throw new Error('User not found'); }
-
-  if (user._id.toString() === req.user._id.toString()) {
-    res.status(400);
-    throw new Error('You cannot disable your own account.');
+  if (req.user.role === 'admin') {
+    // admin cannot touch admins or superusers
+    if (target.role !== 'user') {
+      res.status(403); throw new Error('Admins can only change status of users');
+    }
+  } else if (req.user.role === 'superuser') {
+    // superuser cannot disable other superusers (safety)
+    if (target.role === 'superuser') {
+      res.status(403); throw new Error('Cannot change status of a superuser');
+    }
+  } else {
+    res.status(403); throw new Error('Forbidden');
   }
 
-  user.isActive = isActive;
-  await user.save();
+  target.isActive = !!isActive;
+  await target.save();
 
   sendToAdmins?.({
     kind: 'admin_board',
     type: 'user_updated',
-    message: `User ${isActive ? 'enabled' : 'disabled'}`,
-    entity: { id: user._id.toString(), isActive },
+    message: `Status changed to ${target.isActive ? 'enabled' : 'disabled'}`,
+    entity: { id: target._id, isActive: target.isActive },
     createdAt: new Date().toISOString(),
   });
 
-  res.json({ _id: user._id, name: user.name, email: user.email, role: user.role, isActive: user.isActive });
+  res.json({ _id: target._id, isActive: target.isActive });
 });
 
 // DELETE /api/auth/users/:id  (soft delete -> isActive=false)
+// Soft-delete: same constraints as status, and never delete superuser
 export const softDeleteUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const target = await User.findById(id);
+  if (!target) { res.status(404); throw new Error('User not found'); }
 
-  const user = await User.findById(id);
-  if (!user) { res.status(404); throw new Error('User not found'); }
-
-  if (user._id.toString() === req.user._id.toString()) {
-    res.status(400);
-    throw new Error('You cannot delete your own account.');
+  if (String(target._id) === String(req.user._id)) {
+    res.status(400); throw new Error('Cannot delete yourself');
   }
 
-  user.isActive = false;
-  await user.save();
+  if (req.user.role === 'admin') {
+    if (target.role !== 'user') {
+      res.status(403); throw new Error('Admins can only delete users');
+    }
+  } else if (req.user.role === 'superuser') {
+    if (target.role === 'superuser') {
+      res.status(403); throw new Error('Cannot delete a superuser');
+    }
+  } else {
+    res.status(403); throw new Error('Forbidden');
+  }
+
+  target.isActive = false;
+  await target.save();
 
   sendToAdmins?.({
     kind: 'admin_board',
     type: 'user_updated',
-    message: 'User soft-deleted (disabled).',
-    entity: { id: user._id.toString(), isActive: false },
+    message: 'User soft-deleted',
+    entity: { id: target._id, isActive: false },
     createdAt: new Date().toISOString(),
   });
 
-  res.json({ message: 'User disabled (soft deleted)' });
+  res.json({ _id: target._id, isActive: target.isActive });
 });
