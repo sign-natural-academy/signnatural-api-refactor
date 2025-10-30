@@ -15,14 +15,14 @@ export function addClient({ res, user }) {
   clientsByUser.set(String(user._id), set);
 
   // track admin group
-  if (user.role === 'admin') adminClients.add(res);
+  if (user.role === 'admin' || user.role ==='superuser') adminClients.add(res);
 
   // cleanup on close
   reqOnClose(res, () => {
     allClients.delete(res);
     const s = clientsByUser.get(String(user._id));
     if (s) { s.delete(res); if (s.size === 0) clientsByUser.delete(String(user._id)); }
-    if (user.role === 'admin') adminClients.delete(res);
+    if (user.role === 'admin' || user.role ==='superuser') adminClients.delete(res);
   });
 }
 
