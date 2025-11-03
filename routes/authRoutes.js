@@ -40,11 +40,7 @@ router.get('/me', protect, getMe);
 // Admin-only: create another admin
 router.post('/admin', protect, requireAdmin, validate(createAdminSchema), createAdmin);
 
-// Admin user management
-// router.get('/users', protect, requireAdmin, listUsers);
-// router.patch('/users/:id/role', protect, requireAdmin, updateUserRole);
-// router.patch('/users/:id/status', protect, requireAdmin, updateUserStatus);
-// router.delete('/users/:id', protect, requireAdmin, softDeleteUser);
+
 
 //list users — admin & superuser
 router.get('/users', protect, requireAdminOrSuper, listUsers);
