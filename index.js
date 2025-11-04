@@ -59,6 +59,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use('/api/notifications', notificationStreamRoutes);
+app.use('/api/reports', reportsRoutes);
 
 /** Rate limiting (after trust proxy so req.ip is correct) */
 // sign-natural-api/index.js
@@ -81,7 +82,7 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/testimonials', testimonialRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/notifications', notificationRoutes)
-app.use('/api/reports', reportsRoutes);
+
 
 
 
