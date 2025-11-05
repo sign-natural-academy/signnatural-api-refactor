@@ -3,6 +3,7 @@
 import asyncHandler from 'express-async-handler';
 import Course from '../models/Course.js';
 import { uploadBufferToCloudinary, deleteFromCloudinary } from '../config/cloudinary.js';
+import { logAudit } from '../utils/audit.js';
 
 const createCourse = asyncHandler(async (req, res) => {
   const data = req.body || {};
@@ -85,6 +86,14 @@ const updateCourse = asyncHandler(async (req, res) => {
   });
 
   await course.save();
+  await logAudit({
+    actorId: req.user._id,
+    action: 'Course_updated',
+    entityType: 'Course',
+    entityId: t._id,
+    meta: { approved: true },
+    req,
+  });
   res.json(course);
 });
 

@@ -4,6 +4,7 @@ import Testimonial from '../models/Testimonial.js';
 import { uploadBufferToCloudinary, deleteFromCloudinary } from '../config/cloudinary.js';
 import Notification from '../models/Notification.js';
 import { sendToUser, sendToAdmins } from '../utils/sseHub.js';
+import { logAudit } from '../utils/audit.js';
 
 /** Normalize rating to 1..5 (default 5) */
 function toRating(val) {
@@ -101,6 +102,15 @@ export const approveTestimonial = asyncHandler(async (req, res) => {
 
   doc.approved = true;
   await doc.save();
+
+  await logAudit({
+    actorId: req.user._id,
+    action: 'TESTIMONIAL_APPROVED',
+    entityType: 'Testimonial',
+    entityId: t._id,
+    meta: { approved: true },
+    req,
+  });
 
   // Create stored notification for the user
   if (doc.user) {

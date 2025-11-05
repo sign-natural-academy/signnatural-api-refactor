@@ -3,6 +3,7 @@ import asyncHandler from 'express-async-handler';
 import Booking from '../models/Booking.js';
 import Notification from '../models/Notification.js';
 import { sendToAdmins, sendToUser } from '../utils/sseHub.js';
+import { logAudit } from '../utils/audit.js';
 
 // Map loose inputs to exact Mongoose model names used by refPath
 function normalizeItemType(v) {
@@ -117,6 +118,15 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
 
   booking.status = status;
   await booking.save();
+  
+  await logAudit({
+    actorId: req.user._id,
+    action: 'BOOKING_STATUS_CHANGED',
+    entityType: 'Booking',
+    entityId: b._id,
+    meta: { from: prev, to: status },
+    req,
+  });
 
   // Create user notification (DB)
   await Notification.create({

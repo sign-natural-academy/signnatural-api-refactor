@@ -4,6 +4,7 @@ import asyncHandler from 'express-async-handler';
 import Workshop from '../models/Workshop.js';
 import { uploadBufferToCloudinary, deleteFromCloudinary } from '../config/cloudinary.js';
 
+
 const createWorkshop = asyncHandler(async (req, res) => {
   const data = req.body || {};
   let image = data.image || null;
@@ -77,6 +78,8 @@ const deleteWorkshop = asyncHandler(async (req, res) => {
 
  // Document-level deletion (safe and supported)
   await ws.deleteOne();
+  
+
 
   res.json({ ok: true, message: 'workshop deleted' });
 });
