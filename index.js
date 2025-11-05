@@ -16,6 +16,7 @@ import bookingRoutes from './routes/bookingRoutes.js';
 import testimonialRoutes from './routes/testimonialRoutes.js';
 import productRoutes from './routes/productRoutes.js';
 import reportsRoutes from './routes/reportsRoutes.js';
+import auditRoutes from './routes/auditRoutes.js';  
 
 
 import { notFound, errorHandler } from './middlewares/errorMiddleware.js';
@@ -60,6 +61,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use('/api/notifications', notificationStreamRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/audit', auditRoutes);
 
 /** Rate limiting (after trust proxy so req.ip is correct) */
 // sign-natural-api/index.js
