@@ -3,6 +3,7 @@
 import asyncHandler from 'express-async-handler';
 import Product from '../models/Product.js';
 import { uploadBufferToCloudinary, deleteFromCloudinary } from '../config/cloudinary.js';
+import { logAudit } from '../utils/audit.js';
 
 const createProduct = asyncHandler(async (req, res) => {
   const data = req.body || {};
@@ -23,6 +24,16 @@ const createProduct = asyncHandler(async (req, res) => {
   }
 
   const p = await Product.create({ ...data, image, imagePublicId });
+  // AUDIT+: product created
+  
+  await logAudit({
+    actorId: req.user._id,
+    action: 'PRODUCT_CREATED',
+    entityType: 'Product',
+    entityId: p._id,
+    meta: { title: p.title, price: p.price, stock: p.stock },
+    req,
+  });
   res.status(201).json(p);
 });
 

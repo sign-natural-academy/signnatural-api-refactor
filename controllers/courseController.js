@@ -32,6 +32,16 @@ const createCourse = asyncHandler(async (req, res) => {
     imagePublicId,
   });
 
+  // AUDIT+: course created
+  await logAudit({
+    actorId: req.user._id,
+    action: 'COURSE_CREATED',
+    entityType: 'Course',
+    entityId: course._id,
+    meta: { title: course.title, price: course.price, category: course.category },
+    req,
+  });
+
   res.status(201).json(course);
 });
 
@@ -86,14 +96,18 @@ const updateCourse = asyncHandler(async (req, res) => {
   });
 
   await course.save();
+  // AUDIT+: course updated
+  const after = { title: course.title, price: course.price, category: course.category };
+
   await logAudit({
     actorId: req.user._id,
-    action: 'Course_updated',
+    action: 'COURSE_UPDATED',
     entityType: 'Course',
-    entityId: t._id,
-    meta: { approved: true },
+    entityId: course._id,
+    meta: { before, after },
     req,
   });
+
   res.json(course);
 });
 
@@ -116,6 +130,16 @@ const deleteCourse = asyncHandler(async (req, res) => {
 
   // Document-level deletion (safe and supported)
   await course.deleteOne();
+
+  // AUDIT+: course deleted
+  await logAudit({
+    actorId: req.user._id,
+    action: 'COURSE_DELETED',
+    entityType: 'Course',
+    entityId: course._id,
+    meta: { title: course.title },
+    req,
+  });
 
   res.json({ ok: true, message: 'Course deleted' });
 });

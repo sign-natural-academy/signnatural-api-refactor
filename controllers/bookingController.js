@@ -118,12 +118,12 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
 
   booking.status = status;
   await booking.save();
-  
-  await logAudit({
+
+  await logAudit({                     // AUDIT+: record admin action
     actorId: req.user._id,
     action: 'BOOKING_STATUS_CHANGED',
     entityType: 'Booking',
-    entityId: b._id,
+    entityId: booking._id,
     meta: { from: prev, to: status },
     req,
   });

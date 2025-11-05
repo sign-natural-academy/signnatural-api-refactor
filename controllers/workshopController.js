@@ -3,6 +3,7 @@
 import asyncHandler from 'express-async-handler';
 import Workshop from '../models/Workshop.js';
 import { uploadBufferToCloudinary, deleteFromCloudinary } from '../config/cloudinary.js';
+import { logAudit } from '../utils/audit.js';
 
 
 const createWorkshop = asyncHandler(async (req, res) => {
@@ -24,6 +25,16 @@ const createWorkshop = asyncHandler(async (req, res) => {
   }
 
   const ws = await Workshop.create({ ...data, host: req.user ? req.user._id : data.host, image, imagePublicId });
+
+  // AUDIT+: workshop created
+  await logAudit({
+    actorId: req.user._id,
+    action: 'WORKSHOP_CREATED',
+    entityType: 'Workshop',
+    entityId: ws._id,
+    meta: { title: ws.title, date: ws.date, location: ws.location },
+    req,
+  });
   res.status(201).json(ws);
 });
 
@@ -65,6 +76,16 @@ const updateWorkshop = asyncHandler(async (req, res) => {
 
   Object.keys(req.body || {}).forEach((k) => { ws[k] = req.body[k]; });
   await ws.save();
+   // AUDIT+: workshop updated
+  const after = { title: ws.title, date: ws.date, location: ws.location, price: ws.price };
+  await logAudit({
+    actorId: req.user._id,
+    action: 'WORKSHOP_UPDATED',
+    entityType: 'Workshop',
+    entityId: ws._id,
+    meta: { before, after },
+    req,
+  });
   res.json(ws);
 });
 
@@ -78,6 +99,17 @@ const deleteWorkshop = asyncHandler(async (req, res) => {
 
  // Document-level deletion (safe and supported)
   await ws.deleteOne();
+
+  // AUDIT+: workshop deleted
+  await logAudit({
+    actorId: req.user._id,
+    action: 'WORKSHOP_DELETED',
+    entityType: 'Workshop',
+    entityId: ws._id,
+    meta: { title: ws.title, date: ws.date },
+    req,
+  });
+
   
 
 

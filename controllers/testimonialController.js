@@ -103,11 +103,11 @@ export const approveTestimonial = asyncHandler(async (req, res) => {
   doc.approved = true;
   await doc.save();
 
-  await logAudit({
+ await logAudit({
     actorId: req.user._id,
     action: 'TESTIMONIAL_APPROVED',
     entityType: 'Testimonial',
-    entityId: t._id,
+    entityId: doc._id,
     meta: { approved: true },
     req,
   });
@@ -167,6 +167,16 @@ export const deleteTestimonial = asyncHandler(async (req, res) => {
   }
 
   await Testimonial.deleteOne({ _id: doc._id }); // Mongoose 7+ style
+
+  // AUDIT+: testimonial deleted
+  await logAudit({
+    actorId: req.user._id,
+    action: 'TESTIMONIAL_DELETED',
+    entityType: 'Testimonial',
+    entityId: doc._id,
+    meta: { hadImage: !!doc.imagePublicId },
+    req,
+  });
 
   sendToAdmins({
     kind: 'admin_board',
