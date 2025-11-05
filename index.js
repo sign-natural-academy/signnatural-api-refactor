@@ -17,6 +17,7 @@ import testimonialRoutes from './routes/testimonialRoutes.js';
 import productRoutes from './routes/productRoutes.js';
 import reportsRoutes from './routes/reportsRoutes.js';
 import auditRoutes from './routes/auditRoutes.js';  
+import supportRoutes from './routes/supportRoutes.js';
 
 
 import { notFound, errorHandler } from './middlewares/errorMiddleware.js';
@@ -62,6 +63,7 @@ app.use(cors(corsOptions));
 app.use('/api/notifications', notificationStreamRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/audit', auditRoutes);
+app.use('/api/support', supportRoutes);
 
 /** Rate limiting (after trust proxy so req.ip is correct) */
 // sign-natural-api/index.js
