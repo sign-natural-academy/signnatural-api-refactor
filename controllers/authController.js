@@ -388,3 +388,96 @@ export const softDeleteUser = asyncHandler(async (req, res) => {
 
   res.json({ _id: target._id, isActive: target.isActive });
 });
+
+// PATCH /api/auth/me  (protected)
+export const updateMyProfile = asyncHandler(async (req, res) => {
+  const { name, email } = req.body;                        // 1
+  const user = await User.findById(req.user._id);          // 2
+  if (!user) { res.status(404); throw new Error('User not found'); }
+
+  const before = { name: user.name, email: user.email };   // 3
+
+  if (name !== undefined) user.name = String(name).trim(); // 4
+  if (email !== undefined) user.email = String(email).trim();
+
+  await user.save();                                       // 5
+
+  try {                                                    // 6
+    await logAudit({
+      actorId: req.user._id,
+      action: 'USER_PROFILE_UPDATED',
+      entityType: 'User',
+      entityId: user._id,
+      meta: { before, after: { name: user.name, email: user.email } },
+      req,
+    });
+  } catch (e) { console.warn('audit failed', e?.message || e); }
+
+  const safe = await User.findById(user._id).select('-password'); // 7
+  res.json(safe);                                                 // 8
+});
+
+// PATCH /api/auth/me/password  (protected)
+export const changeMyPassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;          // 1
+  if (!currentPassword || !newPassword) {
+    res.status(400); throw new Error('currentPassword and newPassword are required');
+  }
+
+  const user = await User.findById(req.user._id);             // 2
+  if (!user) { res.status(404); throw new Error('User not found'); }
+
+  const ok = await user.matchPassword(currentPassword);        // 3
+  if (!ok) { res.status(401); throw new Error('Current password is incorrect'); }
+
+  user.password = newPassword;                                 // 4
+  await user.save();                                           // 5
+
+  try {
+    await logAudit({
+      actorId: req.user._id,
+      action: 'USER_PASSWORD_CHANGED',
+      entityType: 'User',
+      entityId: user._id,
+      meta: { self: true },
+      req,
+    });
+  } catch (e) { console.warn('audit failed', e?.message || e); }
+
+  res.json({ message: 'Password updated' });                   // 6
+});
+
+// PATCH /api/auth/me/avatar  (protected, multipart/form-data)
+export const updateMyAvatar = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id).select('-password');    // 1
+  if (!user) { res.status(404); throw new Error('User not found'); }
+
+  if (!req.file?.buffer) {                                               // 2
+    res.status(400); throw new Error('avatar file is required');
+  }
+
+  try {
+    const up = await uploadBufferToCloudinary(req.file.buffer, {         // 3
+      folder: 'signnatural/avatars',
+      transformation: [{ width: 600, crop: 'limit' }],
+    });
+    user.avatar = up.secure_url;
+    // (optional) store user.avatarPublicId = up.public_id
+    await user.save();
+  } catch (e) {
+    res.status(500); throw new Error('Upload failed');
+  }
+
+  try {
+    await logAudit({
+      actorId: req.user._id,
+      action: 'USER_AVATAR_UPDATED',
+      entityType: 'User',
+      entityId: user._id,
+      meta: { hasAvatar: true },
+      req,
+    });
+  } catch (e) { console.warn('audit failed', e?.message || e); }
+
+  res.json(user);                                                        // 4
+});

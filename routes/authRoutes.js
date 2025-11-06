@@ -1,5 +1,6 @@
 // routes/authRoutes.js
 import express from 'express';
+import multer from 'multer';
 import {
   registerUser,
   verifyEmail,
@@ -7,7 +8,7 @@ import {
   loginUser,
   createAdmin,
   getMe,
-  listUsers, updateUserRole, updateUserStatus, softDeleteUser,
+  listUsers, updateUserRole, updateUserStatus, softDeleteUser,updateMyProfile,changeMyPassword,updateMyAvatar,
 } from '../controllers/authController.js';
 
 import otpLimiter  from '../middlewares/otpLimiter.js';
@@ -25,6 +26,7 @@ import { googleSignIn } from '../controllers/authController.js';
 import { googleLoginSchema } from '../validators/authSchemas.js';
 
 const router = express.Router();
+const upload = multer(); // ✅ in-memory storage for avatar file
 
 // Public
 router.post('/register', validate(registerSchema), registerUser);
@@ -34,8 +36,19 @@ router.post('/login', validate(loginSchema), loginUser);
 router.post('/google', validate(googleLoginSchema), googleSignIn);
 
 
-// Protected
+
+// ------------------ Self-service ----------------
+// Read current user profile
 router.get('/me', protect, getMe);
+
+// ✅ Update my profile (name/email)
+router.patch('/me', protect, updateMyProfile);
+
+// ✅ Change my password (requires currentPassword + newPassword)
+router.patch('/me/password', protect, changeMyPassword);
+
+// ✅ Update my avatar (multipart/form-data, field: "avatar")
+router.patch('/me/avatar', protect, upload.single('avatar'), updateMyAvatar);
 
 // Admin-only: create another admin
 router.post('/admin', protect, requireAdmin, validate(createAdminSchema), createAdmin);
