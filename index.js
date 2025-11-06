@@ -19,6 +19,7 @@ import reportsRoutes from './routes/reportsRoutes.js';
 import auditRoutes from './routes/auditRoutes.js';  
 import supportRoutes from './routes/supportRoutes.js';
 import settingsRoutes from './routes/settingsRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
 
 
 import { notFound, errorHandler } from './middlewares/errorMiddleware.js';
@@ -66,6 +67,7 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 /** Rate limiting (after trust proxy so req.ip is correct) */
 // sign-natural-api/index.js
