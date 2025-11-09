@@ -1,5 +1,4 @@
-//controllers/productController.js
-
+// controllers/productController.js
 import asyncHandler from 'express-async-handler';
 import Product from '../models/Product.js';
 import { uploadBufferToCloudinary, deleteFromCloudinary } from '../config/cloudinary.js';
@@ -24,16 +23,21 @@ const createProduct = asyncHandler(async (req, res) => {
   }
 
   const p = await Product.create({ ...data, image, imagePublicId });
-  // AUDIT+: product created
-  
-  await logAudit({
-    actorId: req.user._id,
-    action: 'PRODUCT_CREATED',
-    entityType: 'Product',
-    entityId: p._id,
-    meta: { title: p.title, price: p.price, stock: p.stock },
-    req,
-  });
+
+  // AUDIT (non-blocking): product created
+  try {
+    await logAudit({
+      actorId: req.user._id,
+      action: 'PRODUCT_CREATED',
+      entityType: 'Product',
+      entityId: p._id,
+      meta: { name: p.name, price: p.price, stock: p.stock },
+      req,
+    });
+  } catch (e) {
+    console.warn('audit log failed (PRODUCT_CREATED):', e?.message || e);
+  }
+
   res.status(201).json(p);
 });
 

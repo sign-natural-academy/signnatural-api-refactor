@@ -1,4 +1,3 @@
-
 // controllers/courseController.js
 import asyncHandler from 'express-async-handler';
 import Course from '../models/Course.js';
@@ -32,15 +31,19 @@ const createCourse = asyncHandler(async (req, res) => {
     imagePublicId,
   });
 
-  // AUDIT+: course created
-  await logAudit({
-    actorId: req.user._id,
-    action: 'COURSE_CREATED',
-    entityType: 'Course',
-    entityId: course._id,
-    meta: { title: course.title, price: course.price, category: course.category },
-    req,
-  });
+  // AUDIT (non-blocking): course created
+  try {
+    await logAudit({
+      actorId: req.user._id,
+      action: 'COURSE_CREATED',
+      entityType: 'Course',
+      entityId: course._id,
+      meta: { title: course.title, price: course.price, category: course.category },
+      req,
+    });
+  } catch (e) {
+    console.warn('audit log failed (COURSE_CREATED):', e?.message || e);
+  }
 
   res.status(201).json(course);
 });
@@ -70,6 +73,17 @@ const updateCourse = asyncHandler(async (req, res) => {
     throw new Error('Course not found');
   }
 
+  // snapshot BEFORE changes for audit
+  const before = {
+    title: course.title,
+    price: course.price,
+    duration: course.duration,
+    category: course.category,
+    type: course.type,
+    image: course.image,
+    imagePublicId: course.imagePublicId,
+  };
+
   // If a new image is uploaded, upload to Cloudinary and remove previous asset
   if (req.file && req.file.buffer) {
     try {
@@ -96,17 +110,30 @@ const updateCourse = asyncHandler(async (req, res) => {
   });
 
   await course.save();
-  // AUDIT+: course updated
-  const after = { title: course.title, price: course.price, category: course.category };
 
-  await logAudit({
-    actorId: req.user._id,
-    action: 'COURSE_UPDATED',
-    entityType: 'Course',
-    entityId: course._id,
-    meta: { before, after },
-    req,
-  });
+  // AUDIT (non-blocking): course updated
+  const after = {
+    title: course.title,
+    price: course.price,
+    duration: course.duration,
+    category: course.category,
+    type: course.type,
+    image: course.image,
+    imagePublicId: course.imagePublicId,
+  };
+
+  try {
+    await logAudit({
+      actorId: req.user._id,
+      action: 'COURSE_UPDATED',
+      entityType: 'Course',
+      entityId: course._id,
+      meta: { before, after },
+      req,
+    });
+  } catch (e) {
+    console.warn('audit log failed (COURSE_UPDATED):', e?.message || e);
+  }
 
   res.json(course);
 });
@@ -131,15 +158,19 @@ const deleteCourse = asyncHandler(async (req, res) => {
   // Document-level deletion (safe and supported)
   await course.deleteOne();
 
-  // AUDIT+: course deleted
-  await logAudit({
-    actorId: req.user._id,
-    action: 'COURSE_DELETED',
-    entityType: 'Course',
-    entityId: course._id,
-    meta: { title: course.title },
-    req,
-  });
+  // AUDIT (non-blocking): course deleted
+  try {
+    await logAudit({
+      actorId: req.user._id,
+      action: 'COURSE_DELETED',
+      entityType: 'Course',
+      entityId: course._id,
+      meta: { title: course.title },
+      req,
+    });
+  } catch (e) {
+    console.warn('audit log failed (COURSE_DELETED):', e?.message || e);
+  }
 
   res.json({ ok: true, message: 'Course deleted' });
 });

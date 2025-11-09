@@ -103,14 +103,19 @@ export const approveTestimonial = asyncHandler(async (req, res) => {
   doc.approved = true;
   await doc.save();
 
- await logAudit({
-    actorId: req.user._id,
-    action: 'TESTIMONIAL_APPROVED',
-    entityType: 'Testimonial',
-    entityId: doc._id,
-    meta: { approved: true },
-    req,
-  });
+  // AUDIT (non-blocking)
+  try {
+    await logAudit({
+      actorId: req.user._id,
+      action: 'TESTIMONIAL_APPROVED',
+      entityType: 'Testimonial',
+      entityId: doc._id,
+      meta: { approved: true },
+      req,
+    });
+  } catch (e) {
+    console.warn('audit log failed (TESTIMONIAL_APPROVED):', e?.message || e);
+  }
 
   // Create stored notification for the user
   if (doc.user) {
@@ -168,15 +173,19 @@ export const deleteTestimonial = asyncHandler(async (req, res) => {
 
   await Testimonial.deleteOne({ _id: doc._id }); // Mongoose 7+ style
 
-  // AUDIT+: testimonial deleted
-  await logAudit({
-    actorId: req.user._id,
-    action: 'TESTIMONIAL_DELETED',
-    entityType: 'Testimonial',
-    entityId: doc._id,
-    meta: { hadImage: !!doc.imagePublicId },
-    req,
-  });
+  // AUDIT (non-blocking): testimonial deleted
+  try {
+    await logAudit({
+      actorId: req.user._id,
+      action: 'TESTIMONIAL_DELETED',
+      entityType: 'Testimonial',
+      entityId: doc._id,
+      meta: { hadImage: !!doc.imagePublicId },
+      req,
+    });
+  } catch (e) {
+    console.warn('audit log failed (TESTIMONIAL_DELETED):', e?.message || e);
+  }
 
   sendToAdmins({
     kind: 'admin_board',

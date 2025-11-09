@@ -115,18 +115,23 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error('Booking not found');
   }
-
+  const prev = booking.status
   booking.status = status;
   await booking.save();
 
-  await logAudit({                     // AUDIT+: record admin action
-    actorId: req.user._id,
-    action: 'BOOKING_STATUS_CHANGED',
-    entityType: 'Booking',
-    entityId: booking._id,
-    meta: { from: prev, to: status },
-    req,
-  });
+ // AUDIT (non-blocking)
+  try {
+    await logAudit({
+      actorId: req.user._id,
+      action: 'BOOKING_STATUS_CHANGED',
+      entityType: 'Booking',
+      entityId: booking._id,
+      meta: { from: prev, to: status },
+      req,
+    });
+  } catch (e) {
+    console.warn('audit log failed (BOOKING_STATUS_CHANGED):', e?.message || e);
+  }
 
   // Create user notification (DB)
   await Notification.create({
