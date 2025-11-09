@@ -1,10 +1,8 @@
-//controllers/workshopController.js
-
+// controllers/workshopController.js
 import asyncHandler from 'express-async-handler';
 import Workshop from '../models/Workshop.js';
 import { uploadBufferToCloudinary, deleteFromCloudinary } from '../config/cloudinary.js';
 import { logAudit } from '../utils/audit.js';
-
 
 const createWorkshop = asyncHandler(async (req, res) => {
   const data = req.body || {};
@@ -24,17 +22,27 @@ const createWorkshop = asyncHandler(async (req, res) => {
     }
   }
 
-  const ws = await Workshop.create({ ...data, host: req.user ? req.user._id : data.host, image, imagePublicId });
-
-  // AUDIT+: workshop created
-  await logAudit({
-    actorId: req.user._id,
-    action: 'WORKSHOP_CREATED',
-    entityType: 'Workshop',
-    entityId: ws._id,
-    meta: { title: ws.title, date: ws.date, location: ws.location },
-    req,
+  const ws = await Workshop.create({
+    ...data,
+    host: req.user ? req.user._id : data.host,
+    image,
+    imagePublicId,
   });
+
+  // AUDIT (non-blocking): workshop created
+  try {
+    await logAudit({
+      actorId: req.user._id,
+      action: 'WORKSHOP_CREATED',
+      entityType: 'Workshop',
+      entityId: ws._id,
+      meta: { title: ws.title, date: ws.date, location: ws.location },
+      req,
+    });
+  } catch (e) {
+    console.warn('audit log failed (WORKSHOP_CREATED):', e?.message || e);
+  }
+
   res.status(201).json(ws);
 });
 
@@ -44,7 +52,9 @@ const getWorkshops = asyncHandler(async (req, res) => {
   if (type) filter.type = type;
   if (location) filter.location = location;
   if (q) filter.$or = [{ title: new RegExp(q, 'i') }, { description: new RegExp(q, 'i') }];
-  const ws = await Workshop.find(filter).skip((page - 1) * limit).limit(parseInt(limit, 10));
+  const ws = await Workshop.find(filter)
+    .skip((page - 1) * limit)
+    .limit(parseInt(limit, 10));
   res.json(ws);
 });
 
@@ -57,6 +67,19 @@ const getWorkshop = asyncHandler(async (req, res) => {
 const updateWorkshop = asyncHandler(async (req, res) => {
   const ws = await Workshop.findById(req.params.id);
   if (!ws) { res.status(404); throw new Error('Workshop not found'); }
+
+  // 👇 snapshot BEFORE changes for audit
+  const before = {
+    title: ws.title,
+    date: ws.date,
+    location: ws.location,
+    price: ws.price,
+    duration: ws.duration,
+    participants: ws.participants,
+    type: ws.type,
+    image: ws.image,
+    imagePublicId: ws.imagePublicId,
+  };
 
   if (req.file && req.file.buffer) {
     try {
@@ -76,16 +99,33 @@ const updateWorkshop = asyncHandler(async (req, res) => {
 
   Object.keys(req.body || {}).forEach((k) => { ws[k] = req.body[k]; });
   await ws.save();
-   // AUDIT+: workshop updated
-  const after = { title: ws.title, date: ws.date, location: ws.location, price: ws.price };
-  await logAudit({
-    actorId: req.user._id,
-    action: 'WORKSHOP_UPDATED',
-    entityType: 'Workshop',
-    entityId: ws._id,
-    meta: { before, after },
-    req,
-  });
+
+  // AUDIT (non-blocking): workshop updated
+  const after = {
+    title: ws.title,
+    date: ws.date,
+    location: ws.location,
+    price: ws.price,
+    duration: ws.duration,
+    participants: ws.participants,
+    type: ws.type,
+    image: ws.image,
+    imagePublicId: ws.imagePublicId,
+  };
+
+  try {
+    await logAudit({
+      actorId: req.user._id,
+      action: 'WORKSHOP_UPDATED',
+      entityType: 'Workshop',
+      entityId: ws._id,
+      meta: { before, after },
+      req,
+    });
+  } catch (e) {
+    console.warn('audit log failed (WORKSHOP_UPDATED):', e?.message || e);
+  }
+
   res.json(ws);
 });
 
@@ -94,24 +134,27 @@ const deleteWorkshop = asyncHandler(async (req, res) => {
   if (!ws) { res.status(404); throw new Error('Workshop not found'); }
 
   if (ws.imagePublicId) {
-    try { await deleteFromCloudinary(ws.imagePublicId); } catch (err) { console.error('Cloudinary delete failed (deleteWorkshop):', err.message || err); }
+    try { await deleteFromCloudinary(ws.imagePublicId); } catch (err) {
+      console.error('Cloudinary delete failed (deleteWorkshop):', err.message || err);
+    }
   }
 
- // Document-level deletion (safe and supported)
+  // Document-level deletion (safe and supported)
   await ws.deleteOne();
 
-  // AUDIT+: workshop deleted
-  await logAudit({
-    actorId: req.user._id,
-    action: 'WORKSHOP_DELETED',
-    entityType: 'Workshop',
-    entityId: ws._id,
-    meta: { title: ws.title, date: ws.date },
-    req,
-  });
-
-  
-
+  // AUDIT (non-blocking): workshop deleted
+  try {
+    await logAudit({
+      actorId: req.user._id,
+      action: 'WORKSHOP_DELETED',
+      entityType: 'Workshop',
+      entityId: ws._id,
+      meta: { title: ws.title, date: ws.date },
+      req,
+    });
+  } catch (e) {
+    console.warn('audit log failed (WORKSHOP_DELETED):', e?.message || e);
+  }
 
   res.json({ ok: true, message: 'workshop deleted' });
 });
