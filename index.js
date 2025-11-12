@@ -20,7 +20,8 @@ import auditRoutes from './routes/auditRoutes.js';
 import supportRoutes from './routes/supportRoutes.js';
 import settingsRoutes from './routes/settingsRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
-import mediaRoutes from './routes/mediaRoutes.js'
+import mediaRoutes from './routes/mediaRoutes.js';
+import userSettingsRoutes from './routes/userSettingsRoutes.js'
 
 
 import { notFound, errorHandler } from './middlewares/errorMiddleware.js';
@@ -92,6 +93,7 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/testimonials', testimonialRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/notifications', notificationRoutes)
+app.use("/api/user-settings", userSettingsRoutes);
 
 
 
