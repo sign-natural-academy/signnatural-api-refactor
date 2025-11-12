@@ -6,7 +6,7 @@ import { getMySettings,updateMySettings } from "../controllers/userSettingsContr
 
 const router = express.Router();
 
-router.get("/",getMySettings);
+router.get("/",protect,getMySettings);
 router.patch("/",protect,updateMySettings);
 
 export default router;
