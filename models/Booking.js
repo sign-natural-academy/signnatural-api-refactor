@@ -24,6 +24,11 @@ const BookingSchema = new mongoose.Schema({
   meta: { type: Object }
 }, { timestamps: true });
 
+// create a partial unique index for non-cancelled bookings
+BookingSchema.index(
+  { user: 1, itemType: 1, item: 1 },
+  { unique: true, partialFilterExpression: { status: { $in: ['pending', 'confirmed'] } } }
+);
 
 
 export default mongoose.model('Booking', BookingSchema);
