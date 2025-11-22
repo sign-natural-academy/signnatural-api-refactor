@@ -42,6 +42,21 @@ export const createBooking = asyncHandler(async (req, res) => {
   }
 
   const when = toValidDateOrNull(scheduledAt);
+  // ====== NEW: Prevent duplicate active bookings ======
+  // Consider "active" bookings those that are pending or confirmed (not cancelled/completed).
+  
+  const existing = await Booking.findOne({
+    user: req.user._id,
+    itemType: normType,
+    item: itemId,
+    status: { $in: ['pending', 'confirmed'] },
+  });
+
+  if (existing) {
+    res.status(409); // Conflict
+    throw new Error('You already have an active booking for this item. Cancel the existing booking before creating another.');
+  }
+  // ===================================================
 
   const booking = await Booking.create({
     user: req.user._id,
