@@ -18,9 +18,26 @@ const router = express.Router();
 router.get('/', getCourses);
 router.get('/:id', getCourse);
 
-// Admin-only operations with validation. upload.single BEFORE validate.
-router.post('/', protect, requireAdminOrSuper, upload.single('image'), validate(createCourseSchema), createCourse);
-router.put('/:id', protect, requireAdminOrSuper, upload.single('image'), validate(updateCourseSchema), updateCourse);
-router.delete('/:id', protect,requireAdminOrSuper, deleteCourse);
+// Admin-only operations with validation.
+// Accept both image and video uploads. upload.fields runs BEFORE validate (keeps same order as before).
+router.post(
+  '/',
+  protect,
+  requireAdminOrSuper,
+  upload.fields([{ name: 'image' }, { name: 'video' }]),
+  validate(createCourseSchema),
+  createCourse
+);
+
+router.put(
+  '/:id',
+  protect,
+  requireAdminOrSuper,
+  upload.fields([{ name: 'image' }, { name: 'video' }]),
+  validate(updateCourseSchema),
+  updateCourse
+);
+
+router.delete('/:id', protect, requireAdminOrSuper, deleteCourse);
 
 export default router;
