@@ -31,11 +31,29 @@ export const exportBookingsCsv = async (req, res) => {
     if (status) filter.status = String(status).trim();
     if (fromD && toD) filter.createdAt = { $gte: fromD, $lte: toD };
 
-    const rows = await Booking.find(filter)
-      .select('_id name email course status createdAt')
+    // Populate user (name,email) and item (title/name) for human-friendly CSV
+    const rawRows = await Booking.find(filter)
+      .populate('user', 'name email')
+      .populate('item') // we'll attempt to read title/name from item if present
       .lean();
 
-    const fields = ['_id', 'name', 'email', 'course', 'status', 'createdAt'];
+    // normalize rows to include userName/userEmail and itemTitle
+    const rows = (rawRows || []).map((r) => {
+      const item = r.item || {};
+      const itemTitle = item.title || item.name || item._id || '';
+      return {
+        _id: r._id,
+        userName: r.user?.name || '',
+        userEmail: r.user?.email || '',
+        itemTitle,
+        itemType: r.itemType || '',
+        price: typeof r.price === 'number' ? r.price : (r.price ?? ''),
+        status: r.status || '',
+        createdAt: r.createdAt || '',
+      };
+    });
+
+    const fields = ['_id', 'userName', 'userEmail', 'itemTitle', 'itemType', 'price', 'status', 'createdAt'];
     sendCsv(res, 'bookings.csv', rows, fields);
   } catch (e) {
     console.error('Bookings CSV error:', e);
@@ -57,11 +75,23 @@ export const exportTestimonialsCsv = async (req, res) => {
     }
     if (fromD && toD) filter.createdAt = { $gte: fromD, $lte: toD };
 
-    const rows = await Testimonial.find(filter)
-      .select('_id name message approved createdAt')
+    const rawRows = await Testimonial.find(filter)
+      .populate('user', 'name email')
       .lean();
 
-    const fields = ['_id', 'name', 'message', 'approved', 'createdAt'];
+    const rows = (rawRows || []).map((r) => {
+      return {
+        _id: r._id,
+        userName: r.user?.name || '',
+        userEmail: r.user?.email || '',
+        text: r.text || r.message || '',
+        rating: r.rating ?? '',
+        approved: Boolean(r.approved),
+        createdAt: r.createdAt || '',
+      };
+    });
+
+    const fields = ['_id', 'userName', 'userEmail', 'text', 'rating', 'approved', 'createdAt'];
     sendCsv(res, 'testimonials.csv', rows, fields);
   } catch (e) {
     console.error('Testimonials CSV error:', e);
