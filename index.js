@@ -28,6 +28,7 @@ import { notFound, errorHandler } from './middlewares/errorMiddleware.js';
 import { verifyTransporter } from './utils/email.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import notificationStreamRoutes from './routes/notificationStreamRoutes.js';
+import homeVideoRoutes from "./routes/homeVideoRoutes.js";
 
 const app = express();
 
@@ -72,6 +73,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/media', mediaRoutes);
 app.use("/api/user-settings", userSettingsRoutes);
+app.use("/api/home-video", homeVideoRoutes);
 
 /** Rate limiting (after trust proxy so req.ip is correct) */
 // sign-natural-api/index.js
