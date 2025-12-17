@@ -12,7 +12,7 @@ export const createBookingSchema = Joi.object({
   scheduledAt: Joi.date().iso().optional(),
 
   bookingFor: Joi.object({
-    fullName: Joi.string().min(2).required(),
+    fullName: Joi.string().min(2).optional(),
     email: Joi.string().email().optional(),
     phone: Joi.string().optional(),
   }).required(),
