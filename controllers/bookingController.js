@@ -26,70 +26,105 @@ function toValidDateOrNull(v) {
 }
 
 // POST /api/bookings  (Protected)
+// POST /api/bookings (Auth OPTIONAL)
 export const createBooking = asyncHandler(async (req, res) => {
-  const { itemType, itemId, price, scheduledAt } = req.body;
+  const {
+    itemType,
+    itemId,
+    price,
+    scheduledAt,
+    contact,
+    attendees = [],
+  } = req.body;
 
   const normType = normalizeItemType(itemType);
   if (!normType || !itemId) {
     res.status(400);
-    throw new Error('Invalid payload: itemType (Course|Workshop|Product) and itemId are required.');
+    throw new Error(
+      "Invalid payload: itemType (Course|Workshop|Product) and itemId are required."
+    );
+  }
+
+  // 🔹 Contact is REQUIRED (user or guest)
+  if (!contact?.name || !contact?.email) {
+    res.status(400);
+    throw new Error("Contact name and email are required.");
   }
 
   const priceNum = toNumberOrNull(price);
   if (price !== undefined && priceNum === null) {
     res.status(400);
-    throw new Error('Invalid price: must be a number.');
+    throw new Error("Invalid price: must be a number.");
   }
 
   const when = toValidDateOrNull(scheduledAt);
-  // ====== NEW: Prevent duplicate active bookings ======
-  // Consider "active" bookings those that are pending or confirmed (not cancelled/completed).
-  
-  const existing = await Booking.findOne({
-    user: req.user._id,
+
+  // ====== DUPLICATE PROTECTION ======
+  const duplicateQuery = {
     itemType: normType,
     item: itemId,
-    status: { $in: ['pending', 'confirmed'] },
+    status: { $in: ["pending", "confirmed"] },
+    $or: [],
+  };
+
+  if (req.user?._id) {
+    duplicateQuery.$or.push({ user: req.user._id });
+  }
+
+  duplicateQuery.$or.push({
+    "contact.email": contact.email.toLowerCase(),
   });
 
+  const existing = await Booking.findOne(duplicateQuery);
+
   if (existing) {
-    res.status(409); // Conflict
-    throw new Error('You already have an active booking for this item. Cancel the existing booking before creating another.');
+    res.status(409);
+    throw new Error(
+      "An active booking already exists for this item with this email."
+    );
   }
-  // ===================================================
+  // =================================
 
   const booking = await Booking.create({
-    user: req.user._id,
-    itemType: normType,     // MUST match model names for refPath
+    user: req.user?._id || null,
+    contact: {
+      name: contact.name.trim(),
+      email: contact.email.toLowerCase(),
+      phone: contact.phone,
+    },
+    attendees,
+    itemType: normType,
     item: itemId,
     price: priceNum ?? 0,
     scheduledAt: when || undefined,
-    status: 'pending',
-    payment: { paid: false, amount: priceNum ?? 0 },
+    status: "pending",
+    payment: {
+      paid: false,
+      amount: priceNum ?? 0,
+    },
   });
 
-  // Notify admins (DB + SSE)
+  // Admin notification (UNCHANGED)
   await Notification.create({
-    audience: 'admin',
-    type: 'new_booking',
+    audience: "admin",
+    type: "new_booking",
     message: `New ${normType.toLowerCase()} booking created.`,
-    link: '/admin-dashboard?tab=bookings',
+    link: "/admin-dashboard?tab=bookings",
     meta: { bookingId: booking._id, itemType: normType },
   });
 
   sendToAdmins({
-    kind: 'admin_board',
-    type: 'new_booking',
+    kind: "admin_board",
+    type: "new_booking",
     message: `New ${normType.toLowerCase()} booking created.`,
-    link: '/admin-dashboard?tab=bookings',
+    link: "/admin-dashboard?tab=bookings",
     entity: { id: booking._id.toString(), itemType: normType },
     createdAt: new Date().toISOString(),
   });
 
-  // Return with convenient populated preview
   const populated = await Booking.findById(booking._id)
-    .populate('item')
-    .populate('user', 'name email');
+    .populate("item")
+    .populate("user", "name email");
 
   res.status(201).json(populated);
 });

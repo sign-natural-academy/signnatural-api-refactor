@@ -1,34 +1,81 @@
 // models/Booking.js
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
-const BookingSchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+const BookingSchema = new mongoose.Schema(
+  {
+    /**
+     * Account that CREATED the booking
+     * - null for guest bookings
+     */
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
 
-  // IMPORTANT: these must match the Mongoose model names you registered
-  // e.g. mongoose.model('Course', CourseSchema)
-  itemType: { type: String, enum: ['Course', 'Workshop', 'Product'], required: true },
+    /**
+     * Person the booking is FOR
+     * - can be the user themselves
+     * - or someone else
+     */
+    contact: {
+      name: { type: String, required: true },
+      email: { type: String, required: true, lowercase: true },
+      phone: { type: String },
+    },
 
-  // refPath points to itemType and Mongoose uses that string to find the model
-  item: { type: mongoose.Schema.Types.ObjectId, required: true, refPath: 'itemType' },
+    /**
+     * Whether the booking was made for someone else
+     */
+    bookedForOther: {
+      type: Boolean,
+      default: false,
+    },
 
-  price: { type: Number, default: 0 },
-  status: { type: String, enum: ['pending', 'confirmed', 'cancelled', 'completed'], default: 'pending' },
-  payment: {
-    provider: String,
-    providerId: String,
-    amount: Number,
-    currency: String,
-    paid: { type: Boolean, default: false }
+    itemType: {
+      type: String,
+      enum: ["Course", "Workshop", "Product"],
+      required: true,
+    },
+
+    item: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      refPath: "itemType",
+    },
+
+    price: { type: Number, default: 0 },
+
+    status: {
+      type: String,
+      enum: ["pending", "confirmed", "cancelled", "completed"],
+      default: "pending",
+    },
+
+    payment: {
+      provider: String,
+      providerId: String,
+      amount: Number,
+      currency: String,
+      paid: { type: Boolean, default: false },
+    },
+
+    scheduledAt: { type: Date },
+    meta: { type: Object },
   },
-  scheduledAt: { type: Date },
-  meta: { type: Object }
-}, { timestamps: true });
-
-// create a partial unique index for non-cancelled bookings
-BookingSchema.index(
-  { user: 1, itemType: 1, item: 1 },
-  { unique: true, partialFilterExpression: { status: { $in: ['pending', 'confirmed'] } } }
+  { timestamps: true }
 );
 
+// 🔐 Duplicate protection for LOGGED-IN USERS ONLY
+BookingSchema.index(
+  { user: 1, itemType: 1, item: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      user: { $type: "objectId" },
+      status: { $in: ["pending", "confirmed"] },
+    },
+  }
+);
 
-export default mongoose.model('Booking', BookingSchema);
+export default mongoose.model("Booking", BookingSchema);

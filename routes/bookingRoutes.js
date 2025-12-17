@@ -10,12 +10,29 @@ import {
 import { protect, requireAdmin } from '../middlewares/authMiddleware.js';
 import validate from '../middlewares/validate.js';
 import { createBookingSchema, updateBookingStatusSchema} from '../validators/bookingSchemas.js';
+import { optionalAuth } from '../middlewares/optionalAuth.js';
 
 const router = express.Router();
 
-// Create a booking (user)
-router.post('/', protect, validate(createBookingSchema), createBooking);
-
+/**
+ * Create a booking
+ * - Authenticated users: normal booking, enforced 1-per-item
+ * - Guests: allowed, must provide guestInfo
+ * - Book-for-others: handled via bookingFor
+ */
+router.post(
+  '/',
+  optionalAuth,
+  (req, res, next) => {
+    // Pass auth state into Joi validation
+    req.validationContext = {
+      isGuest: !req.user
+    };
+    next();
+  },
+  validate(createBookingSchema),
+  createBooking
+);
 // User's bookings
 router.get('/me', protect, getMyBookings);
 
