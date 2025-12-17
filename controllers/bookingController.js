@@ -45,10 +45,28 @@ export const createBooking = asyncHandler(async (req, res) => {
     );
   }
 
-  // 🔹 Contact is REQUIRED (user or guest)
-  if (!contact?.name || !contact?.email) {
-    res.status(400);
-    throw new Error("Contact name and email are required.");
+  /**
+   * CONTACT RESOLUTION (CRITICAL FIX)
+   * Logged-in user → override contact from profile
+   * Guest → must provide contact
+   */
+  let finalContact;
+
+  if (req.user) {
+    finalContact = {
+      name: req.user.name,
+      email: req.user.email.toLowerCase(),
+    };
+  } else {
+    if (!contact?.name || !contact?.email) {
+      res.status(400);
+      throw new Error("Contact name and email are required for guest booking.");
+    }
+    finalContact = {
+      name: contact.name.trim(),
+      email: contact.email.toLowerCase(),
+      phone: contact.phone,
+    };
   }
 
   const priceNum = toNumberOrNull(price);
@@ -59,7 +77,11 @@ export const createBooking = asyncHandler(async (req, res) => {
 
   const when = toValidDateOrNull(scheduledAt);
 
-  // ====== DUPLICATE PROTECTION ======
+  /**
+   * DUPLICATE PROTECTION
+   * - by user (if logged in)
+   * - OR by contact email
+   */
   const duplicateQuery = {
     itemType: normType,
     item: itemId,
@@ -71,27 +93,19 @@ export const createBooking = asyncHandler(async (req, res) => {
     duplicateQuery.$or.push({ user: req.user._id });
   }
 
-  duplicateQuery.$or.push({
-    "contact.email": contact.email.toLowerCase(),
-  });
+  duplicateQuery.$or.push({ "contact.email": finalContact.email });
 
   const existing = await Booking.findOne(duplicateQuery);
-
   if (existing) {
     res.status(409);
     throw new Error(
       "An active booking already exists for this item with this email."
     );
   }
-  // =================================
 
   const booking = await Booking.create({
     user: req.user?._id || null,
-    contact: {
-      name: contact.name.trim(),
-      email: contact.email.toLowerCase(),
-      phone: contact.phone,
-    },
+    contact: finalContact,
     attendees,
     itemType: normType,
     item: itemId,
@@ -104,7 +118,7 @@ export const createBooking = asyncHandler(async (req, res) => {
     },
   });
 
-  // Admin notification (UNCHANGED)
+  // Admin notification (unchanged)
   await Notification.create({
     audience: "admin",
     type: "new_booking",
@@ -128,6 +142,7 @@ export const createBooking = asyncHandler(async (req, res) => {
 
   res.status(201).json(populated);
 });
+
 
 // GET /api/bookings/me  (Protected)
 export const getMyBookings = asyncHandler(async (req, res) => {

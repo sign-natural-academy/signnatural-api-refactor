@@ -1,4 +1,3 @@
-// models/Booking.js
 import mongoose from "mongoose";
 
 const BookingSchema = new mongoose.Schema(
@@ -14,9 +13,9 @@ const BookingSchema = new mongoose.Schema(
     },
 
     /**
-     * Person the booking is FOR
-     * - can be the user themselves
-     * - or someone else
+     * Person responsible for the booking
+     * - user → auto-filled
+     * - guest → provided manually
      */
     contact: {
       name: { type: String, required: true },
@@ -25,12 +24,13 @@ const BookingSchema = new mongoose.Schema(
     },
 
     /**
-     * Whether the booking was made for someone else
+     * Additional people (optional)
      */
-    bookedForOther: {
-      type: Boolean,
-      default: false,
-    },
+    attendees: [
+      {
+        email: { type: String, lowercase: true },
+      },
+    ],
 
     itemType: {
       type: String,
@@ -66,7 +66,9 @@ const BookingSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// 🔐 Duplicate protection for LOGGED-IN USERS ONLY
+/**
+ * Prevent duplicate ACTIVE bookings for logged-in users
+ */
 BookingSchema.index(
   { user: 1, itemType: 1, item: 1 },
   {

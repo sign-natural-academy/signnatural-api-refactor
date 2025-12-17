@@ -11,21 +11,24 @@ export const createBookingSchema = Joi.object({
 
   scheduledAt: Joi.date().iso().optional(),
 
-  bookingFor: Joi.object({
-    fullName: Joi.string().min(2).optional(),
-    email: Joi.string().email().optional(),
+  /**
+   * Contact is ALWAYS required
+   * - auto-filled for logged-in users
+   * - manually provided for guests
+   */
+  contact: Joi.object({
+    name: Joi.string().min(2).required(),
+    email: Joi.string().email().required(),
     phone: Joi.string().optional(),
   }).required(),
 
-  guestInfo: Joi.when("$isGuest", {
-    is: true,
-    then: Joi.object({
-      fullName: Joi.string().required(),
-      email: Joi.string().email().required(),
-      phone: Joi.string().required(),
-    }).required(),
-    otherwise: Joi.forbidden(),
-  }),
+  attendees: Joi.array()
+    .items(
+      Joi.object({
+        email: Joi.string().email().required(),
+      })
+    )
+    .optional(),
 });
 
 export const updateBookingStatusSchema = Joi.object({
