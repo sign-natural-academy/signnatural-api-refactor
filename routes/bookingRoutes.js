@@ -23,13 +23,6 @@ const router = express.Router();
 router.post(
   '/',
   optionalAuth,
-  (req, res, next) => {
-    // Pass auth state into Joi validation
-    req.validationContext = {
-      isGuest: !req.user
-    };
-    next();
-  },
   validate(createBookingSchema),
   createBooking
 );
