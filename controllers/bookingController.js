@@ -46,15 +46,15 @@ export const createBooking = asyncHandler(async (req, res) => {
   }
 
   /**
-   * CONTACT RESOLUTION (CRITICAL FIX)
-   * Logged-in user → override contact from profile
-   * Guest → must provide contact
+   * CONTACT RESOLUTION (AUTHORITATIVE)
+   * - Logged-in user → derive from user
+   * - Guest / booking for others → require contact
    */
   let finalContact;
 
   if (req.user) {
     finalContact = {
-      name: req.user.name,
+      name: req.user.name || "Registered User",
       email: req.user.email.toLowerCase(),
     };
   } else {
@@ -107,6 +107,7 @@ export const createBooking = asyncHandler(async (req, res) => {
     user: req.user?._id || null,
     contact: finalContact,
     attendees,
+    bookedForOther: attendees.length > 0,
     itemType: normType,
     item: itemId,
     price: priceNum ?? 0,
@@ -118,7 +119,7 @@ export const createBooking = asyncHandler(async (req, res) => {
     },
   });
 
-  // Admin notification (unchanged)
+  /** ✅ ADMIN NOTIFICATION (RESTORED) */
   await Notification.create({
     audience: "admin",
     type: "new_booking",
