@@ -3,7 +3,7 @@ import HomeVideo from "../models/HomeVideo.js";
 import { uploadBufferToCloudinary, deleteFromCloudinary } from "../config/cloudinary.js";
 import { logAudit } from "../utils/audit.js";
 
-const MAX_VIDEO_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_VIDEO_BYTES = 100 * 1024 * 1024;    // 100 MB
 
 // PUBLIC: GET /api/home-video
 // Returns the latest published home video (or null)
@@ -49,7 +49,7 @@ export async function adminCreateHomeVideo(req, res) {
     // If we have an uploaded file, use that (and ignore youtubeUrl)
     if (req.file && req.file.buffer) {
       if (req.file.size > MAX_VIDEO_BYTES) {
-        return res.status(400).json({ message: "Video must be ≤ 10 MB" });
+        return res.status(400).json({ message: "Video must be ≤ 100 MB" });
       }
 
       try {
