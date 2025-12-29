@@ -4,6 +4,11 @@ import Booking from '../models/Booking.js';
 import Notification from '../models/Notification.js';
 import { sendToAdmins, sendToUser } from '../utils/sseHub.js';
 import { logAudit } from '../utils/audit.js';
+import {
+  sendBookingConfirmation,
+  sendAttendeeConfirmation,
+} from "../utils/bookingEmails.js";
+
 
 // Map loose inputs to exact Mongoose model names used by refPath
 function normalizeItemType(v) {
@@ -158,6 +163,40 @@ export const createBooking = asyncHandler(async (req, res) => {
       amount: priceNum ?? 0,
     },
   });
+      /* ---------------- BOOKING CONFIRMATION EMAILS (NON-BLOCKING) ---------------- */
+  (async () => {
+    try {
+      // Booker (guest or user)
+      if (booking.contact?.email) {
+        await sendBookingConfirmation({
+          to: booking.contact.email,
+          name: booking.contact.name,
+          itemTitle: booking.item?.title || "Your booking",
+          itemType: booking.itemType,
+          bookingId: booking._id,
+        });
+      }
+
+      // Attendees (if booking for others)
+      if (Array.isArray(booking.attendees)) {
+        for (const attendee of booking.attendees) {
+          if (!attendee?.email) continue;
+
+          await sendAttendeeConfirmation({
+            to: attendee.email,
+            itemTitle: booking.item?.title || "Your session",
+            itemType: booking.itemType,
+          });
+        }
+      }
+    } catch (err) {
+      // Never block booking flow
+      console.error(
+        "Booking confirmation email failed:",
+        err?.message || err
+      );
+    }
+  })();
 
   /* ---------------- ADMIN NOTIFICATION (UNCHANGED) ---------------- */
   await Notification.create({

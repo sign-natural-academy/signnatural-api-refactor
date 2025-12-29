@@ -23,12 +23,11 @@ import analyticsRoutes from './routes/analyticsRoutes.js';
 import mediaRoutes from './routes/mediaRoutes.js';
 import userSettingsRoutes from './routes/userSettingsRoutes.js'
 
-
 import { notFound, errorHandler } from './middlewares/errorMiddleware.js';
-import { verifyTransporter } from './utils/email.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import notificationStreamRoutes from './routes/notificationStreamRoutes.js';
 import homeVideoRoutes from "./routes/homeVideoRoutes.js";
+
 
 const app = express();
 
@@ -82,7 +81,7 @@ const limiter = rateLimit({
   max: 300,
   standardHeaders: true,
   legacyHeaders: false,
-  // 👇 let the SSE endpoint through
+  //  let the SSE endpoint through
   skip: (req) => req.path === '/api/notifications/stream',
 });
 app.use(limiter);
@@ -96,6 +95,8 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/testimonials', testimonialRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/notifications', notificationRoutes)
+
+
 
 
 
@@ -118,12 +119,7 @@ async function start() {
     console.log('MongoDB connected');
 
     // Non-blocking SMTP verification
-    try {
-      const smtpOk = await verifyTransporter();
-      if (!smtpOk) console.warn('Warning: SMTP verify failed. OTP/email may not send.');
-    } catch (err) {
-      console.warn('SMTP verify threw:', err?.message || err);
-    }
+   
 
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   } catch (err) {
