@@ -79,3 +79,72 @@ If you have questions, please contact the person who made the booking.
     html,
   });
 }
+export async function sendBookingStatusEmail(booking) {
+  const recipientEmail =
+    booking.user?.email || booking.contact?.email;
+
+  if (!recipientEmail) return;
+
+  const itemTitle =
+    booking.item?.title || booking.item?.name || "your booking";
+
+  const statusText = booking.status.toUpperCase();
+
+  const subject = `Booking ${statusText} — Sign Natural Academy`;
+
+  const text = `
+Hello,
+
+Your booking for "${itemTitle}" is now marked as ${booking.status}.
+
+If you have any questions, please contact us.
+
+— Sign Natural Academy
+`;
+
+  const html = `
+  <div style="font-family: Arial, sans-serif; color:#222;">
+    <p>Hello,</p>
+    <p>
+      Your booking for <strong>${itemTitle}</strong> has been
+      <strong>${booking.status}</strong>.
+    </p>
+
+    ${
+      booking.status === "confirmed"
+        ? "<p>We look forward to having you.</p>"
+        : ""
+    }
+
+    ${
+      booking.status === "cancelled"
+        ? "<p>If this was a mistake, please contact support.</p>"
+        : ""
+    }
+
+    ${
+      booking.status === "completed"
+        ? "<p>Thank you for participating!</p>"
+        : ""
+    }
+
+    <hr />
+    <small>Sign Natural Academy</small>
+  </div>
+  `;
+
+  try {
+    await sendMail({
+      to: recipientEmail,
+      subject,
+      text,
+      html,
+    });
+  } catch (err) {
+    // IMPORTANT: never block booking updates
+    console.warn(
+      "Booking status email failed:",
+      err?.message || err
+    );
+  }
+}

@@ -7,6 +7,7 @@ import { logAudit } from '../utils/audit.js';
 import {
   sendBookingConfirmation,
   sendAttendeeConfirmation,
+  sendBookingStatusEmail,
 } from "../utils/bookingEmails.js";
 
 
@@ -254,6 +255,11 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
   const prev = booking.status
   booking.status = status;
   await booking.save();
+  // EMAIL: booking status update (non-blocking)
+if (["confirmed", "cancelled", "completed"].includes(status)) {
+  sendBookingStatusEmail(booking);
+}
+
 
  // AUDIT (non-blocking)
   try {
