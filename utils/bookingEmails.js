@@ -1,12 +1,86 @@
 // utils/bookingEmails.js
 import { sendMail } from "./email.js";
 
+const BRAND_LOGO =
+  process.env.EMAIL_LOGO_URL
+/* ---------- Shared layout ---------- */
+function emailLayout({ title, body }) {
+  return `
+  <div style="background:#f7f5f2;padding:24px 0;">
+    <div style="
+      max-width:600px;
+      margin:0 auto;
+      background:#ffffff;
+      border-radius:12px;
+      overflow:hidden;
+      box-shadow:0 10px 30px rgba(0,0,0,0.06);
+      font-family:Arial, Helvetica, sans-serif;
+      color:#222;
+    ">
+      <!-- Header -->
+      <div style="
+        padding:20px 24px;
+        background:#455f30;
+        text-align:center;
+      ">
+        <img
+          src="${BRAND_LOGO}"
+          alt="Sign Natural Academy"
+          width="120"
+          style="
+            max-width:120px;
+            height:auto;
+            display:block;
+            margin:0 auto 8px;
+          "
+        />
+        <div style="
+          font-size:14px;
+          letter-spacing:0.5px;
+          color:#ffffff;
+          opacity:0.9;
+        ">
+          Sign Natural Academy
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div style="padding:24px;">
+        <h2 style="
+          margin:0 0 12px;
+          font-size:20px;
+          color:#222;
+        ">
+          ${title}
+        </h2>
+
+        <div style="
+          font-size:14px;
+          line-height:1.6;
+          color:#444;
+        ">
+          ${body}
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div style="
+        padding:16px 24px;
+        background:#fafafa;
+        font-size:12px;
+        color:#777;
+        text-align:center;
+      ">
+        © ${new Date().getFullYear()} Sign Natural Academy<br/>
+        Learning • Craft • Community
+      </div>
+    </div>
+  </div>
+  `;
+}
 
 
-
-/**
- * Booking confirmation email (booker)
- */
+/* ---------- Booking confirmation (booker) ---------- */
 export async function sendBookingConfirmation({
   to,
   name,
@@ -14,41 +88,38 @@ export async function sendBookingConfirmation({
   itemType,
   bookingId,
 }) {
-  const subject = `Booking confirmed — ${itemTitle}`;
+  const subject = `Booking received — ${itemTitle}`;
 
-  const text = `Hi ${name || "there"},
+  const body = `
+    <p>Hi ${name || "there"},</p>
 
-Your booking for the ${itemType} "${itemTitle}" has been received successfully.
+    <p>
+      Your booking for the <strong>${itemType}</strong> below has been received:
+    </p>
 
-Booking reference: ${bookingId}
+    <p style="font-size:16px;">
+      <strong>${itemTitle}</strong>
+    </p>
 
-We’ll notify you if there are any updates.
+    <p>
+      <strong>Booking reference:</strong><br/>
+      ${bookingId}
+    </p>
 
-— Sign Natural Academy`;
-
-  const html = `
-    <div style="font-family: Arial, sans-serif; color:#222;">
-      <p>Hi ${name || "there"},</p>
-      <p>Your booking for the <strong>${itemType}</strong> below has been received:</p>
-      <p><strong>${itemTitle}</strong></p>
-      <p><strong>Booking reference:</strong> ${bookingId}</p>
-      <p>We’ll notify you if there are any updates.</p>
-      <hr/>
-      <small>Sign Natural Academy</small>
-    </div>
+    <p>
+      We’ll notify you as soon as there are any updates.
+    </p>
   `;
 
   return sendMail({
     to,
     subject,
-    text,
-    html,
+    text: `Your booking for ${itemTitle} has been received.`,
+    html: emailLayout({ title: "Booking confirmed", body }),
   });
 }
 
-/**
- * Attendee confirmation email
- */
+/* ---------- Attendee confirmation ---------- */
 export async function sendAttendeeConfirmation({
   to,
   itemTitle,
@@ -56,98 +127,76 @@ export async function sendAttendeeConfirmation({
 }) {
   const subject = `You’ve been registered — ${itemTitle}`;
 
-  const text = `Hello,
+  const body = `
+    <p>Hello,</p>
 
-You have been registered for the ${itemType} "${itemTitle}".
+    <p>
+      You have been registered for the following <strong>${itemType}</strong>:
+    </p>
 
-If you have questions, please contact the person who made the booking.
+    <p style="font-size:16px;">
+      <strong>${itemTitle}</strong>
+    </p>
 
-— Sign Natural Academy`;
-
-  const html = `
-    <div style="font-family: Arial, sans-serif; color:#222;">
-      <p>Hello,</p>
-      <p>You have been registered for the <strong>${itemType}</strong>:</p>
-      <p><strong>${itemTitle}</strong></p>
-      <p>If you have questions, please contact the person who made the booking.</p>
-      <hr/>
-      <small>Sign Natural Academy</small>
-    </div>
+    <p>
+      If you have any questions, please contact the person who made the booking.
+    </p>
   `;
 
   return sendMail({
     to,
     subject,
-    text,
-    html,
+    text: `You have been registered for ${itemTitle}.`,
+    html: emailLayout({ title: "You’re registered", body }),
   });
 }
+
+/* ---------- Booking status updates ---------- */
 export async function sendBookingStatusEmail(booking) {
   const recipientEmail =
     booking.user?.email || booking.contact?.email;
-
   if (!recipientEmail) return;
 
   const itemTitle =
     booking.item?.title || booking.item?.name || "your booking";
 
-  const statusText = booking.status.toUpperCase();
+  const status = booking.status;
 
-  const subject = `Booking ${statusText} — Sign Natural Academy`;
+  const subject = `Booking ${status.toUpperCase()} — ${itemTitle}`;
 
-  const text = `
-Hello,
-
-Your booking for "${itemTitle}" is now marked as ${booking.status}.
-
-If you have any questions, please contact us.
-
-— Sign Natural Academy
-`;
-
-  const html = `
-  <div style="font-family: Arial, sans-serif; color:#222;">
+  const body = `
     <p>Hello,</p>
+
     <p>
-      Your booking for <strong>${itemTitle}</strong> has been
-      <strong>${booking.status}</strong>.
+      Your booking for <strong>${itemTitle}</strong> is now marked as
+      <strong>${status}</strong>.
     </p>
 
     ${
-      booking.status === "confirmed"
+      status === "confirmed"
         ? "<p>We look forward to having you.</p>"
         : ""
     }
-
     ${
-      booking.status === "cancelled"
+      status === "cancelled"
         ? "<p>If this was a mistake, please contact support.</p>"
         : ""
     }
-
     ${
-      booking.status === "completed"
+      status === "completed"
         ? "<p>Thank you for participating!</p>"
         : ""
     }
-
-    <hr />
-    <small>Sign Natural Academy</small>
-  </div>
   `;
 
   try {
     await sendMail({
       to: recipientEmail,
       subject,
-      text,
-      html,
+      text: `Your booking for ${itemTitle} is now ${status}.`,
+      html: emailLayout({ title: "Booking update", body }),
     });
   } catch (err) {
-    // IMPORTANT: never block booking updates
-    console.warn(
-      "Booking status email failed:",
-      err?.message || err
-    );
+    console.warn("Booking status email failed:", err?.message || err);
   }
 }
