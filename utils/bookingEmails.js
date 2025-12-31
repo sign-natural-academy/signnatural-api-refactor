@@ -1,6 +1,9 @@
 // utils/bookingEmails.js
 import { sendMail } from "./email.js";
 
+
+
+
 /**
  * Booking confirmation email (booker)
  */

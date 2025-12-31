@@ -148,56 +148,60 @@ export const createBooking = asyncHandler(async (req, res) => {
       );
     }
   }
+const booking = await Booking.create({
+  user: req.user?._id || null,
+  contact: finalContact,
+  attendees,
+  itemType: normType,
+  item: itemId,
+  price: priceNum ?? 0,
+  scheduledAt: when || undefined,
+  status: "pending",
+  payment: {
+    paid: false,
+    amount: priceNum ?? 0,
+  },
+});
 
-  /* ---------------- CREATE BOOKING ---------------- */
-  const booking = await Booking.create({
-    user: req.user?._id || null,
-    contact: finalContact,
-    attendees,
-    itemType: normType,
-    item: itemId,
-    price: priceNum ?? 0,
-    scheduledAt: when || undefined,
-    status: "pending",
-    payment: {
-      paid: false,
-      amount: priceNum ?? 0,
-    },
-  });
-      /* ---------------- BOOKING CONFIRMATION EMAILS (NON-BLOCKING) ---------------- */
-  (async () => {
-    try {
-      // Booker (guest or user)
-      if (booking.contact?.email) {
-        await sendBookingConfirmation({
-          to: booking.contact.email,
-          name: booking.contact.name,
-          itemTitle: booking.item?.title || "Your booking",
-          itemType: booking.itemType,
-          bookingId: booking._id,
+/* ---------- POPULATE ONCE FOR EMAILS ---------- */
+const bookingForEmail = await Booking.findById(booking._id)
+  .populate("item")
+  .populate("user", "name email");
+
+/* ---------- BOOKING CONFIRMATION EMAILS (NON-BLOCKING) ---------- */
+(async () => {
+  try {
+    // Booker (guest or user)
+    if (bookingForEmail.contact?.email) {
+      await sendBookingConfirmation({
+        to: bookingForEmail.contact.email,
+        name: bookingForEmail.contact.name,
+        itemTitle: bookingForEmail.item?.title || "Your booking",
+        itemType: bookingForEmail.itemType,
+        bookingId: bookingForEmail._id,
+      });
+    }
+
+    // Attendees (if booking for others)
+    if (Array.isArray(bookingForEmail.attendees)) {
+      for (const attendee of bookingForEmail.attendees) {
+        if (!attendee?.email) continue;
+
+        await sendAttendeeConfirmation({
+          to: attendee.email,
+          itemTitle: bookingForEmail.item?.title || "Your session",
+          itemType: bookingForEmail.itemType,
         });
       }
-
-      // Attendees (if booking for others)
-      if (Array.isArray(booking.attendees)) {
-        for (const attendee of booking.attendees) {
-          if (!attendee?.email) continue;
-
-          await sendAttendeeConfirmation({
-            to: attendee.email,
-            itemTitle: booking.item?.title || "Your session",
-            itemType: booking.itemType,
-          });
-        }
-      }
-    } catch (err) {
-      // Never block booking flow
-      console.error(
-        "Booking confirmation email failed:",
-        err?.message || err
-      );
     }
-  })();
+  } catch (err) {
+    console.error(
+      "Booking confirmation email failed:",
+      err?.message || err
+    );
+  }
+})();
+
 
   /* ---------------- ADMIN NOTIFICATION (UNCHANGED) ---------------- */
   await Notification.create({
