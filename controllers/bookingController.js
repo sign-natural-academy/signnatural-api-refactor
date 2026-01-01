@@ -219,7 +219,7 @@ const populatedBooking = await Booking.findById(booking._id)
 
   
 
-  res.status(201).json(populated);
+  res.status(201).json(populatedBooking);
 });
 
 
@@ -262,9 +262,14 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
   const prev = booking.status
   booking.status = status;
   await booking.save();
-  // EMAIL: booking status update (non-blocking)
+ // RE-FETCH WITH POPULATION (FIX)
+const populatedBooking = await Booking.findById(booking._id)
+  .populate("item")
+  .populate("user", "name email");
+
+// EMAIL: booking status update (non-blocking)
 if (["confirmed", "cancelled", "completed"].includes(status)) {
-  sendBookingStatusEmail(booking);
+  sendBookingStatusEmail(populatedBooking);
 }
 
 
@@ -312,9 +317,6 @@ if (["confirmed", "cancelled", "completed"].includes(status)) {
     createdAt: new Date().toISOString(),
   });
 
-  // Return updated w/ population for UI
-  const populated = await Booking.findById(booking._id)
-    .populate('user', 'name email')
-    .populate('item');
-  res.json(populated);
+ 
+  res.json(populatedBooking);
 });
