@@ -164,43 +164,48 @@ const booking = await Booking.create({
 });
 
 /* ---------- POPULATE ONCE FOR EMAILS ---------- */
-const bookingForEmail = await Booking.findById(booking._id)
-  .populate("item")
-  .populate("user", "name email");
+const populatedBooking = await Booking.findById(booking._id)
+    .populate("item")
+    .populate("user", "name email");
 
 /* ---------- BOOKING CONFIRMATION EMAILS (NON-BLOCKING) ---------- */
 (async () => {
-  try {
-    // Booker (guest or user)
-    if (bookingForEmail.contact?.email) {
-      await sendBookingConfirmation({
-        to: bookingForEmail.contact.email,
-        name: bookingForEmail.contact.name,
-        itemTitle: bookingForEmail.item?.title || "Your booking",
-        itemType: bookingForEmail.itemType,
-        bookingId: bookingForEmail._id,
-      });
-    }
+    try {
+      const itemTitle =
+        populatedBooking.item?.title ||
+        populatedBooking.item?.name ||
+        "Your booking";
 
-    // Attendees (if booking for others)
-    if (Array.isArray(bookingForEmail.attendees)) {
-      for (const attendee of bookingForEmail.attendees) {
-        if (!attendee?.email) continue;
-
-        await sendAttendeeConfirmation({
-          to: attendee.email,
-          itemTitle: bookingForEmail.item?.title || "Your session",
-          itemType: bookingForEmail.itemType,
+      // Booker
+      if (populatedBooking.contact?.email) {
+        await sendBookingConfirmation({
+          to: populatedBooking.contact.email,
+          name: populatedBooking.contact.name,
+          itemTitle,
+          itemType: populatedBooking.itemType,
+          bookingId: populatedBooking._id,
         });
       }
+
+      // Attendees
+      if (Array.isArray(populatedBooking.attendees)) {
+        for (const attendee of populatedBooking.attendees) {
+          if (!attendee?.email) continue;
+
+          await sendAttendeeConfirmation({
+            to: attendee.email,
+            itemTitle,
+            itemType: populatedBooking.itemType,
+          });
+        }
+      }
+    } catch (err) {
+      console.error(
+        "Booking confirmation email failed:",
+        err?.message || err
+      );
     }
-  } catch (err) {
-    console.error(
-      "Booking confirmation email failed:",
-      err?.message || err
-    );
-  }
-})();
+  })();
 
 
   /* ---------------- ADMIN NOTIFICATION (UNCHANGED) ---------------- */
@@ -212,9 +217,7 @@ const bookingForEmail = await Booking.findById(booking._id)
     meta: { bookingId: booking._id, itemType: normType },
   });
 
-  const populated = await Booking.findById(booking._id)
-    .populate("item")
-    .populate("user", "name email");
+  
 
   res.status(201).json(populated);
 });
