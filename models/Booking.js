@@ -1,3 +1,4 @@
+import { decode } from "jsonwebtoken";
 import mongoose from "mongoose";
 
 const BookingSchema = new mongoose.Schema(
@@ -11,7 +12,12 @@ const BookingSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
+     booker:{
+      type:mongoose.Schema.Types.ObjectId,
+      ref:"User",
+      default:null,
 
+     },
     /**
      * Person responsible for the booking
      * - user → auto-filled
