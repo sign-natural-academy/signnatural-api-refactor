@@ -148,12 +148,8 @@ export const createBooking = asyncHandler(async (req, res) => {
       );
     }
   }
-const isBookingForOthers = Array.isArray(attendees) && attendees.length > 0;
-
 const booking = await Booking.create({
-  user: isBookingForOthers ? null :
-   req.user?._id || null,
-   booker:req.user?._id || null,
+  user: req.user?._id || null,
   contact: finalContact,
   attendees,
   itemType: normType,
@@ -166,7 +162,6 @@ const booking = await Booking.create({
     amount: priceNum ?? 0,
   },
 });
-
 
 /* ---------- POPULATE ONCE FOR EMAILS ---------- */
 const populatedBooking = await Booking.findById(booking._id)
