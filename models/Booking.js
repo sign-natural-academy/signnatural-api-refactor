@@ -10,8 +10,9 @@ const BookingSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
+      index: true,
     },
-     
+
     /**
      * Person responsible for the booking
      * - user → auto-filled
@@ -19,7 +20,7 @@ const BookingSchema = new mongoose.Schema(
      */
     contact: {
       name: { type: String, required: true },
-      email: { type: String, required: true, lowercase: true },
+      email: { type: String, required: true, lowercase: true, index: true },
       phone: { type: String },
     },
 
@@ -28,7 +29,7 @@ const BookingSchema = new mongoose.Schema(
      */
     attendees: [
       {
-        email: { type: String, lowercase: true },
+        email: { type: String, lowercase: true, index: true },
       },
     ],
 
@@ -36,12 +37,14 @@ const BookingSchema = new mongoose.Schema(
       type: String,
       enum: ["Course", "Workshop", "Product"],
       required: true,
+      index: true,
     },
 
     item: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
       refPath: "itemType",
+      index: true,
     },
 
     price: { type: Number, default: 0 },
@@ -50,6 +53,7 @@ const BookingSchema = new mongoose.Schema(
       type: String,
       enum: ["pending", "confirmed", "cancelled", "completed"],
       default: "pending",
+      index: true,
     },
 
     payment: {
@@ -67,17 +71,10 @@ const BookingSchema = new mongoose.Schema(
 );
 
 /**
- * Prevent duplicate ACTIVE bookings for logged-in users
+ * SUPPORTING (NON-UNIQUE) INDEXES
+ * Business rules are enforced in controllers, not schema
  */
-BookingSchema.index(
-  { user: 1, itemType: 1, item: 1 },
-  {
-    unique: true,
-    partialFilterExpression: {
-      user: { $type: "objectId" },
-      status: { $in: ["pending", "confirmed"] },
-    },
-  }
-);
+BookingSchema.index({ itemType: 1, item: 1, status: 1 });
+BookingSchema.index({ createdAt: -1 });
 
 export default mongoose.model("Booking", BookingSchema);
