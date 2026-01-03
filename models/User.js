@@ -14,6 +14,9 @@ const userSchema = new mongoose.Schema({
    provider: { type: String, enum: ['local', 'google'], default: 'local' },
   googleId: { type: String, default: null },
   isActive:{type:Boolean,default:true},
+  resetOtp: { type: String },
+  resetOtpExpires: { type: Date },
+
 }, { timestamps: true });
 
 // Hash password before saving

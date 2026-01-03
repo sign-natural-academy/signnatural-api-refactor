@@ -31,6 +31,73 @@ async function createAndSendOtp(user) {
   await sendOtpEmail(user.email, otp, user.name);
 }
 
+// forgot password
+
+export const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    res.status(400);
+    throw new Error("Email is required");
+  }
+
+  const user = await User.findOne({ email: email.toLowerCase() });
+
+  // SECURITY: always return success
+  if (!user) {
+    return res.json({ ok: true });
+  }
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+  user.resetOtp = otp;
+  user.resetOtpExpires = Date.now() + 10 * 60 * 1000; // 10 min
+  await user.save();
+
+  await sendMail({
+    to: user.email,
+    subject: "Reset your Sign Natural password",
+    text: `Your reset code is ${otp}`,
+    html: `
+      <h2>Password reset</h2>
+      <p>Your verification code is:</p>
+      <h3>${otp}</h3>
+      <p>This code expires in 10 minutes.</p>
+    `,
+  });
+
+  res.json({ ok: true });
+});
+
+// reset password
+export const resetPassword = asyncHandler(async (req, res) => {
+  const { otp, password } = req.body;
+
+  if (!otp || !password) {
+    res.status(400);
+    throw new Error("OTP and password are required");
+  }
+
+  const user = await User.findOne({
+    resetOtp: otp,
+    resetOtpExpires: { $gt: Date.now() },
+  });
+
+  if (!user) {
+    res.status(400);
+    throw new Error("Invalid or expired code");
+  }
+
+  user.password = await bcrypt.hash(password, 10);
+  user.resetOtp = undefined;
+  user.resetOtpExpires = undefined;
+
+  await user.save();
+
+  res.json({ ok: true });
+});
+
+
 /* --------------------------- Auth: Local -------------------------- */
 
 // POST /api/auth/register

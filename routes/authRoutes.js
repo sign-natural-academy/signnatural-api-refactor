@@ -8,7 +8,7 @@ import {
   loginUser,
   createAdmin,
   getMe,
-  listUsers, updateUserRole, updateUserStatus, softDeleteUser,updateMyProfile,changeMyPassword,updateMyAvatar,
+  listUsers, updateUserRole, updateUserStatus, softDeleteUser,updateMyProfile,changeMyPassword,updateMyAvatar,forgotPassword,resetPassword
 } from '../controllers/authController.js';
 
 import otpLimiter  from '../middlewares/otpLimiter.js';
@@ -34,6 +34,9 @@ router.post('/verify-email', validate(verifyEmailSchema), verifyEmail);
 router.post('/resend-otp', otpLimiter, validate(resendOtpSchema), resendOtp);
 router.post('/login', validate(loginSchema), loginUser);
 router.post('/google', validate(googleLoginSchema), googleSignIn);
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password", resetPassword);
+
 
 
 
@@ -41,13 +44,13 @@ router.post('/google', validate(googleLoginSchema), googleSignIn);
 // Read current user profile
 router.get('/me', protect, getMe);
 
-// ✅ Update my profile (name/email)
+//  Update my profile (name/email)
 router.patch('/me', protect, updateMyProfile);
 
-// ✅ Change my password (requires currentPassword + newPassword)
+// Change my password (requires currentPassword + newPassword)
 router.patch('/me/password', protect, changeMyPassword);
 
-// ✅ Update my avatar (multipart/form-data, field: "avatar")
+// Update my avatar (multipart/form-data, field: "avatar")
 router.patch('/me/avatar', protect, upload.single('avatar'), updateMyAvatar);
 
 // Admin-only: create another admin
