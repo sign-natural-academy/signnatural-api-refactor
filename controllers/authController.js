@@ -6,7 +6,7 @@ import { OAuth2Client } from 'google-auth-library';
 import Otp from '../models/Otp.js';
 import User from '../models/User.js';
 import generateToken from '../utils/generateToken.js';
-import { sendOtpEmail } from '../utils/email.js';
+import { sendOtpEmail,sendPasswordResetEmail } from '../utils/email.js';
 import { sendToAdmins } from '../utils/sseHub.js';
 import { logAudit } from '../utils/audit.js';
 
@@ -57,7 +57,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   // 🔹 NON-BLOCKING EMAIL (Resend)
   (async () => {
     try {
-      await sendOtpEmail(
+      await sendPasswordResetEmail(
         user.email,
         otp,
         user.name

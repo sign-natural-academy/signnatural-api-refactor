@@ -25,6 +25,43 @@ export async function sendMail({
     html,
   });
 }
+export async function sendPasswordResetEmail({ to, otp, name = "" }) {
+  if (!to) throw new Error("sendPasswordResetEmail: to is required");
+
+  const expires = process.env.OTP_EXPIRES_MINUTES || 10;
+  const from =
+    process.env.EMAIL_FROM || "Sign Natural <hello@signnatural.com>";
+
+  const subject = "Reset your password — Sign Natural Academy";
+
+  const text = `Hi ${name || "there"},
+
+We received a request to reset your password.
+
+Your reset code is: ${otp}
+
+This code expires in ${expires} minutes.
+If you didn’t request this, you can safely ignore this email.
+
+— Sign Natural Academy`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; color:#222;">
+      <h2>Password reset</h2>
+      <p>Hi ${name || "there"},</p>
+      <p>We received a request to reset your password.</p>
+      <p><strong>Your reset code:</strong></p>
+      <h2 style="letter-spacing:4px">${otp}</h2>
+      <p>This code expires in ${expires} minutes.</p>
+      <p>If you didn’t request this, you can safely ignore this email.</p>
+      <hr />
+      <small>Sign Natural Academy</small>
+    </div>
+  `;
+
+  return sendMail({ to, subject, text, html, from });
+}
+
 
 /**
  * sendOtpEmail
