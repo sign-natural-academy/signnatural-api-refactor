@@ -32,6 +32,8 @@ async function createAndSendOtp(user) {
 }
 
 // forgot password
+
+
 export const forgotPassword = asyncHandler(async (req, res) => {
   const { email } = req.body;
 
@@ -42,36 +44,27 @@ export const forgotPassword = asyncHandler(async (req, res) => {
 
   const user = await User.findOne({ email: email.toLowerCase() });
 
-  // SECURITY: always return success (avoid user enumeration)
+  // Security: always return success
   if (!user) {
     return res.json({ ok: true });
   }
 
-  // Generate 6-digit OTP
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
   user.resetOtp = otp;
   user.resetOtpExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
   await user.save();
 
-  // 🔹 NON-BLOCKING EMAIL (Resend)
-  (async () => {
-    try {
-      await sendPasswordResetEmail(
-        user.email,
-        otp,
-        user.name
-      );
-    } catch (err) {
-      console.warn(
-        "Forgot password email failed:",
-        err?.message || err
-      );
-    }
-  })();
+  // ✅ Correct email
+  await sendPasswordResetEmail({
+    to: user.email,
+    otp,
+    name: user.name,
+  });
 
   res.json({ ok: true });
 });
+
 
 // reset password
 export const resetPassword = asyncHandler(async (req, res) => {
