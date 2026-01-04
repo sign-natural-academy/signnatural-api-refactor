@@ -54,7 +54,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   user.resetOtpExpires = Date.now() + 10 * 60 * 1000; // 10 min
   await user.save();
 
-  await sendMail({
+  await sendOtpEmail({
     to: user.email,
     subject: "Reset your Sign Natural password",
     text: `Your reset code is ${otp}`,
