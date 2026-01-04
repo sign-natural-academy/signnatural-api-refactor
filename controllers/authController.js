@@ -32,7 +32,6 @@ async function createAndSendOtp(user) {
 }
 
 // forgot password
-
 export const forgotPassword = asyncHandler(async (req, res) => {
   const { email } = req.body;
 
@@ -43,28 +42,33 @@ export const forgotPassword = asyncHandler(async (req, res) => {
 
   const user = await User.findOne({ email: email.toLowerCase() });
 
-  // SECURITY: always return success
+  // SECURITY: always return success (avoid user enumeration)
   if (!user) {
     return res.json({ ok: true });
   }
 
+  // Generate 6-digit OTP
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
   user.resetOtp = otp;
-  user.resetOtpExpires = Date.now() + 10 * 60 * 1000; // 10 min
+  user.resetOtpExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
   await user.save();
 
-  await sendOtpEmail({
-    to: user.email,
-    subject: "Reset your Sign Natural password",
-    text: `Your reset code is ${otp}`,
-    html: `
-      <h2>Password reset</h2>
-      <p>Your verification code is:</p>
-      <h3>${otp}</h3>
-      <p>This code expires in 10 minutes.</p>
-    `,
-  });
+  // 🔹 NON-BLOCKING EMAIL (Resend)
+  (async () => {
+    try {
+      await sendOtpEmail(
+        user.email,
+        otp,
+        user.name
+      );
+    } catch (err) {
+      console.warn(
+        "Forgot password email failed:",
+        err?.message || err
+      );
+    }
+  })();
 
   res.json({ ok: true });
 });
