@@ -38,22 +38,54 @@ export const exportBookingsCsv = async (req, res) => {
       .lean();
 
     // normalize rows to include userName/userEmail and itemTitle
-    const rows = (rawRows || []).map((r) => {
-      const item = r.item || {};
-      const itemTitle = item.title || item.name || item._id || '';
-      return {
-        _id: r._id,
-        userName: r.user?.name || '',
-        userEmail: r.user?.email || '',
-        itemTitle,
-        itemType: r.itemType || '',
-        price: typeof r.price === 'number' ? r.price : (r.price ?? ''),
-        status: r.status || '',
-        createdAt: r.createdAt || '',
-      };
-    });
+  const rows = (rawRows || []).map((r) => {
+  const item = r.item || {};
+  const itemTitle = item.title || item.name || item._id || '';
 
-    const fields = ['_id', 'userName', 'userEmail', 'itemTitle', 'itemType', 'price', 'status', 'createdAt'];
+  const bookingMode =
+    !r.user
+      ? "Guest"
+      : Array.isArray(r.attendees) && r.attendees.length > 0
+      ? "For Others"
+      : "Self";
+
+  const attendeeEmails = Array.isArray(r.attendees)
+    ? r.attendees.map(a => a.email).filter(Boolean).join("; ")
+    : "";
+
+  const attendeeCount = Array.isArray(r.attendees)
+    ? r.attendees.length
+    : 0;
+
+  return {
+    _id: r._id,
+    userName: r.user?.name || r.contact?.name || '',
+    userEmail: r.user?.email || r.contact?.email || '',
+    bookingMode,
+    itemTitle,
+    itemType: r.itemType || '',
+    price: typeof r.price === 'number' ? r.price : (r.price ?? ''),
+    status: r.status || '',
+    attendeeCount,
+    attendeeEmails,
+    createdAt: r.createdAt || '',
+  };
+});
+
+const fields = [
+  '_id',
+  'userName',
+  'userEmail',
+  'bookingMode',
+  'itemTitle',
+  'itemType',
+  'price',
+  'status',
+  'attendeeCount',
+  'attendeeEmails',
+  'createdAt',
+];
+
     sendCsv(res, 'bookings.csv', rows, fields);
   } catch (e) {
     console.error('Bookings CSV error:', e);
