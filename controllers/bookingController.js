@@ -187,18 +187,21 @@ const populatedBooking = await Booking.findById(booking._id)
         });
       }
 
-      // Attendees
-      if (Array.isArray(populatedBooking.attendees)) {
-        for (const attendee of populatedBooking.attendees) {
-          if (!attendee?.email) continue;
+      // Attendees (dispatch all emails without blocking)
+if (Array.isArray(populatedBooking.attendees)) {
+  const attendeeEmails = populatedBooking.attendees
+    .filter(a => a?.email)
+    .map(a =>
+      sendAttendeeConfirmation({
+        to: a.email,
+        itemTitle,
+        itemType: populatedBooking.itemType,
+      })
+    );
 
-          await sendAttendeeConfirmation({
-            to: attendee.email,
-            itemTitle,
-            itemType: populatedBooking.itemType,
-          });
-        }
-      }
+  // Fire-and-forget safely
+  Promise.allSettled(attendeeEmails);
+}
     } catch (err) {
       console.error(
         "Booking confirmation email failed:",
