@@ -48,7 +48,8 @@ if (process.env.NODE_ENV !== 'production') {
 const allowedOrigins = [
   process.env.FRONTEND_URL,      // e.g. https://your-site.netlify.app
   'http://localhost:5173',       // Vite dev
-  'http://localhost:3000',       // CRA/other dev
+  'http://localhost:3000',
+  'https://academy.signnatural.com',       // CRA/other dev
 ].filter(Boolean);
 
 const corsOptions = {
