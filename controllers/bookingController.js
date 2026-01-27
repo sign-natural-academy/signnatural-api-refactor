@@ -57,6 +57,7 @@ export const createBooking = asyncHandler(async (req, res) => {
     finalContact = {
       name: req.user.name,
       email: req.user.email.toLowerCase(),
+       phone: contact?.phone || null
     };
   } else {
     if (!contact?.name || !contact?.email) {
