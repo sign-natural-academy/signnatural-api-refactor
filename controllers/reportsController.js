@@ -29,7 +29,16 @@ export const exportBookingsCsv = async (req, res) => {
     const toD = safeDate(to);
 
     if (status) filter.status = String(status).trim();
-    if (fromD && toD) filter.createdAt = { $gte: fromD, $lte: toD };
+    if (fromD && toD) {
+  // normalize to full-day range
+  const start = new Date(fromD);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(toD);
+  end.setHours(23, 59, 59, 999);
+
+  filter.createdAt = { $gte: start, $lte: end };
+}
 
     // Populate user (name,email) and item (title/name) for human-friendly CSV
     const rawRows = await Booking.find(filter)
@@ -107,7 +116,16 @@ export const exportTestimonialsCsv = async (req, res) => {
       const norm = String(approved).toLowerCase();
       filter.approved = norm === 'true' || norm === '1';
     }
-    if (fromD && toD) filter.createdAt = { $gte: fromD, $lte: toD };
+    if (fromD && toD) {
+  // normalize to full-day range
+  const start = new Date(fromD);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(toD);
+  end.setHours(23, 59, 59, 999);
+
+  filter.createdAt = { $gte: start, $lte: end };
+}
 
     const rawRows = await Testimonial.find(filter)
       .populate('user', 'name email')
